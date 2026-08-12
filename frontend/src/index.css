@@ -1,0 +1,53 @@
+/* ============================================================
+   src/index.css  — Global styles for Orbital Guardian
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:        #0a0e1a;
+  --surface:   #111827;
+  --surface2:  #1f2937;
+  --border:    #374151;
+  --text:      #f9fafb;
+  --muted:     #9ca3af;
+  --accent:    #3b82f6;
+
+  --critical:  #dc2626;
+  --high:      #ea580c;
+  --moderate:  #ca8a04;
+  --low:       #16a34a;
+  --negligible:#2563eb;
+
+  font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Utility classes ─────────────────────────────────────── */
+.truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mono     { font-family: 'Consolas', 'Fira Mono', monospace; font-size: 12px; }
