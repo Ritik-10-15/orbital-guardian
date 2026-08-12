@@ -94,92 +94,62 @@ function Earth() {
 }
 
 // ── Orbit track line ─────────────────────────────────────────
-function OrbitTrack() {
-  const { orbitPoints } = useStore()
-
-  const geometry = useMemo(() => {
-    if (orbitPoints.length < 2) return null
-    const pts = orbitPoints.map(p =>
-      latLonAltToVec3(p.latitude_deg, p.longitude_deg, p.altitude_km)
-    )
-    return new THREE.BufferGeometry().setFromPoints(pts)
-  }, [orbitPoints])
-
-  if (!geometry) return null
-
-  return (
-    <line>
-      <primitive object={geometry} attach="geometry" />
-      <lineBasicMaterial color="#3b82f6" opacity={0.75} transparent />
-    </line>
-  )
-}
-
-// ── Animated spacecraft dot ───────────────────────────────────
-// Smoothly interpolates between successive live frames
-function SpacecraftDot() {
-  const { liveFrame } = useStore()
-  const meshRef    = useRef<THREE.Mesh>(null)
-  const glowRef    = useRef<THREE.Mesh>(null)
-  const targetPos  = useRef(new THREE.Vector3())
-  const currentPos = useRef(new THREE.Vector3())
-  const prevFrame  = useRef<LiveFrame | null>(null)
-  const pulseTime  = useRef(0)
-
-  // Update target whenever a new frame arrives
-  useEffect(() => {
-    if (!liveFrame) return
-    const pos = latLonAltToVec3(
-      liveFrame.latitude_deg,
-      liveFrame.longitude_deg,
-      liveFrame.altitude_km
-    )
-    targetPos.current.copy(pos)
-    prevFrame.current = liveFrame
-  }, [liveFrame])
-
-  // Animate toward target every frame
-  useFrame((_, delta) => {
-    if (!meshRef.current || !glowRef.current) return
-
-    // Smooth lerp — fast enough to feel live, slow enough to look smooth
-    currentPos.current.lerp(targetPos.current, Math.min(1, delta * 3))
-    meshRef.current.position.copy(currentPos.current)
-    glowRef.current.position.copy(currentPos.current)
-
-    // Pulse glow scale
-    pulseTime.current += delta * 2.5
-    const pulse = 1 + 0.25 * Math.sin(pulseTime.current)
-    glowRef.current.scale.setScalar(pulse)
-  })
-
-  if (!liveFrame) return null
+  function OrbitTracks() {
+  const { fleet } = useStore()
 
   return (
     <>
-      {/* Core dot */}
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[0.018, 16, 16]} />
-        <meshBasicMaterial color="#facc15" />
-      </mesh>
+      {fleet.filter(m => m.active && m.orbit_points.length > 1).map(member => {
+        const pts = member.orbit_points.map(p =>
+          latLonAltToVec3(p.latitude_deg, p.longitude_deg, p.altitude_km)
+        )
+        const geometry = new THREE.BufferGeometry().setFromPoints(pts)
+        return (
+          <line key={member.id}>
+            <primitive object={geometry} attach="geometry" />
+            <lineBasicMaterial color={member.colour} opacity={0.75} transparent />
+          </line>
+        )
+      })}
+    </>
+  )
+}
+// ── Animated spacecraft dot ───────────────────────────────────
+// Smoothly interpolates between successive live frames
+function FleetDots() {
+  const { fleet, activeFleetId, setActiveFleetId } = useStore()
 
-      {/* Pulsing glow halo */}
-      <mesh ref={glowRef}>
-        <ringGeometry args={[0.024, 0.036, 24]} />
-        <meshBasicMaterial
-          color="#facc15"
-          opacity={0.35}
-          transparent
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+  return (
+    <>
+      {fleet.filter(m => m.active && m.live_frame).map(member => {
+        const frame = member.live_frame!
+        const pos = latLonAltToVec3(frame.latitude_deg, frame.longitude_deg, frame.altitude_km)
+        const isActive = member.id === activeFleetId
+
+        return (
+          <group key={member.id} position={pos}>
+            <mesh onClick={() => setActiveFleetId(member.id)}>
+              <sphereGeometry args={[isActive ? 0.02 : 0.014, 16, 16]} />
+              <meshBasicMaterial color={member.colour} />
+            </mesh>
+            {isActive && (
+              <mesh>
+                <ringGeometry args={[0.026, 0.038, 24]} />
+                <meshBasicMaterial color={member.colour} opacity={0.35} transparent side={THREE.DoubleSide} />
+              </mesh>
+            )}
+          </group>
+        )
+      })}
     </>
   )
 }
 
 // ── Debris markers (positioned on actual orbit shell) ────────
 function DebrisMarkers() {
-  const { events, setSelectedEvent } = useStore()
+  const { fleet, activeFleetId, setSelectedEvent } = useStore()
+  const active = fleet.find(m => m.id === activeFleetId)
+  const events = active?.events ?? []
 
   return (
     <>
@@ -189,17 +159,12 @@ function DebrisMarkers() {
           ev.risk_level === 'HIGH'     ? '#ea580c' :
           ev.risk_level === 'MODERATE' ? '#ca8a04' : '#6b7280'
 
-        // Spread debris markers evenly around the equatorial belt at ISS altitude
         const lon = (i / Math.max(events.length, 1)) * 360 - 180
-        const lat = (i % 3 - 1) * 15    // slight lat variation: -15°, 0°, +15°
+        const lat = (i % 3 - 1) * 15
         const pos = latLonAltToVec3(lat, lon, 410)
 
         return (
-          <mesh
-            key={ev.debris_name + i}
-            position={pos}
-            onClick={() => setSelectedEvent(ev)}
-          >
+          <mesh key={ev.debris_name + i} position={pos} onClick={() => setSelectedEvent(ev)}>
             <octahedronGeometry args={[0.016]} />
             <meshBasicMaterial color={colour} />
           </mesh>
@@ -281,9 +246,9 @@ export function Globe() {
         <Earth />
         <Clouds />
         <Atmosphere />
-        <OrbitTrack />
+        <OrbitTracks />
         <DebrisMarkers />
-        <SpacecraftDot />
+        <FleetDots />
 
         {/* Mouse controls */}
         <OrbitControls

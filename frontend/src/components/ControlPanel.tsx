@@ -1,8 +1,7 @@
 // ============================================================
 // src/components/ControlPanel.tsx
 // Option B upgrade — catalog source selector + Space-Track support
-// ============================================================
-
+// ======
 import React, { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { api } from '../api/client'
@@ -22,6 +21,7 @@ export function ControlPanel() {
     spacecraft, setSpacecraft,
     setOrbitPoints, setEvents,
     setLoading, setError, loading,
+    activeFleetId, setFleetOrbitTrack, setFleetEvents,
   } = useStore()
 
   const [name,    setName]    = useState(spacecraft.name)
@@ -48,6 +48,7 @@ export function ControlPanel() {
     try {
       const res = await api.orbitTrack(tle, 2, 60)
       setOrbitPoints(res.points)
+      setFleetOrbitTrack(activeFleetId, res.points)  
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -84,6 +85,9 @@ export function ControlPanel() {
 
       const result = await api.conjunctions(tle, debrisTles, 72, 5)
       setEvents(result.events)
+      const worst = result.events[0]?.risk_level ?? 'UNKNOWN'          // ← add
+      const worstScore = result.events[0]?.risk_score ?? 0             // ← add
+      setFleetEvents(activeFleetId, result.events, worst, worstScore)  // ← add
     } catch (e) {
       const msg = (e as Error).message
       setError(

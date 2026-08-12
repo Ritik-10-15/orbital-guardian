@@ -9,7 +9,7 @@ import { createLiveSocket } from '../api/client'
 import type { LiveFrame } from '../types'
 
 export function LiveStatus() {
-  const { spacecraft, setLiveFrame, liveFrame } = useStore()
+  const { spacecraft, setLiveFrame, liveFrame, activeFleetId, setFleetLiveFrame } = useStore()
   const [connected, setConnected] = useState(false)
   const [utc, setUtc] = useState(new Date().toISOString())
 
@@ -26,6 +26,7 @@ export function LiveStatus() {
       5,
       (frame) => {
         setLiveFrame(frame as LiveFrame)
+        setFleetLiveFrame(activeFleetId, frame as LiveFrame)
         setConnected(true)
       },
       () => setConnected(false)
