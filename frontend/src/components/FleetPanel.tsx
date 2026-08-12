@@ -29,6 +29,7 @@ export function FleetPanel() {
 
   const [scanResult, setScanResult] = useState<FleetScanResponse | null>(null)
   const [scanError,  setScanError]  = useState<string | null>(null)
+  const [showResults, setShowResults] = useState(true)
 
   async function handleFleetScan() {
     setFleetLoading(true)
@@ -36,12 +37,10 @@ export function FleetPanel() {
     setScanResult(null)
 
     try {
-      // Fetch catalog for debris screening
       const catalogRes = await fetch('/api/catalog/celestrak?category=stations&limit=30')
       const catalog    = await catalogRes.json()
       const debris     = catalog.objects ?? []
 
-      // Scan each active fleet member sequentially
       const results = []
       for (const member of fleet) {
         if (!member.active) continue
@@ -58,7 +57,6 @@ export function FleetPanel() {
             events:          res.events,
           })
 
-          // Also load orbit track for globe
           const trackRes = await api.orbitTrack(member.tle, 2, 60)
           setFleetOrbitTrack(member.id, trackRes.points)
         } catch {
@@ -98,7 +96,6 @@ export function FleetPanel() {
       flex: 1,
       overflowY: 'auto',
     }}>
-      {/* Fleet scan button */}
       <button
         onClick={handleFleetScan}
         disabled={fleetLoading}
@@ -121,7 +118,6 @@ export function FleetPanel() {
         <div style={{ fontSize: '11px', color: '#f87171' }}>{scanError}</div>
       )}
 
-      {/* Summary bar */}
       {scanResult && (
         <div style={{
           display: 'grid',
@@ -151,12 +147,19 @@ export function FleetPanel() {
         </div>
       )}
 
-      {/* Per-spacecraft results table */}
-      <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        Fleet Status
+      <div
+        onClick={() => setShowResults(s => !s)}
+        style={{
+          fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase',
+          letterSpacing: '0.06em', cursor: 'pointer',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}
+      >
+        <span>Fleet Status</span>
+        <span>{showResults ? '▲' : '▼'}</span>
       </div>
 
-      {fleet.map(member => {
+      {showResults && fleet.map(member => {
         const result = scanResult?.results.find(r => r.spacecraft_name === member.tle.name)
         return (
           <div
@@ -169,7 +172,6 @@ export function FleetPanel() {
               borderLeft: `3px solid ${member.colour}`,
             }}
           >
-            {/* Name row */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -188,7 +190,6 @@ export function FleetPanel() {
               <RiskBadge level={member.risk_level} score={member.risk_score > 0 ? member.risk_score : undefined} size="sm" />
             </div>
 
-            {/* Telemetry row */}
             <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: 'var(--muted)', flexWrap: 'wrap' }}>
               {member.live_frame && (
                 <>
@@ -205,7 +206,6 @@ export function FleetPanel() {
               )}
             </div>
 
-            {/* Top event preview */}
             {member.events.length > 0 && (
               <div style={{
                 marginTop: '6px',

@@ -9,7 +9,8 @@ import { Globe }           from './components/Globe'
 import { AlertDashboard }  from './components/AlertDashboard'
 import { ControlPanel }    from './components/ControlPanel'
 import { HeatmapPanel }    from './components/HeatmapPanel'
-
+import { FleetManager }    from './components/FleetManager'
+import { FleetPanel }      from './components/FleetPanel'
 export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
@@ -82,7 +83,9 @@ export default function App() {
             ))}
           </div>
         </div>
-
+         {/* Fleet manager — new sidebar */}
+        <FleetManager />
+        <FleetPanel />
         {/* Alert dashboard — fixed right panel */}
         <AlertDashboard />
       </div>

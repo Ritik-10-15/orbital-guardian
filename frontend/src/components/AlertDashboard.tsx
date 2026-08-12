@@ -440,8 +440,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 // ── Main dashboard ───────────────────────────────────────────
+// ── Main dashboard ───────────────────────────────────────────
 export function AlertDashboard() {
   const { events, selectedEvent, setSelectedEvent, loading, error } = useStore()
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
     <div style={{
@@ -463,51 +465,71 @@ export function AlertDashboard() {
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 700, fontSize: '13px' }}>⚠ Conjunction Alerts</span>
-        {events.length > 0 && (
-          <span style={{
-            background: '#dc2626',
-            color: '#fff',
-            borderRadius: '999px',
-            padding: '1px 8px',
-            fontSize: '11px',
-            fontWeight: 700,
-          }}>
-            {events.length}
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {events.length > 0 && (
+            <span style={{
+              background: '#dc2626',
+              color: '#fff',
+              borderRadius: '999px',
+              padding: '1px 8px',
+              fontSize: '11px',
+              fontWeight: 700,
+            }}>
+              {events.length}
+            </span>
+          )}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            style={{
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              color: 'var(--muted)',
+              fontSize: '11px',
+              padding: '3px 8px',
+              cursor: 'pointer',
+            }}
+          >
+            {collapsed ? '▼' : '▲'}
+          </button>
+        </div>
       </div>
 
-      {/* Event list */}
-      <div style={{ flex: selectedEvent ? '0 0 auto' : 1, overflowY: 'auto' }}>
-        {loading && (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-            ⏳ Scanning 72-hour window…
-          </div>
-        )}
-        {error && (
-          <div style={{ padding: '12px 14px', color: '#f87171', fontSize: '11px', lineHeight: 1.5 }}>
-            {error}
-          </div>
-        )}
-        {!loading && events.length === 0 && !error && (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-            No events detected.<br />Click <strong>🔍 Scan Conjunctions</strong> to check for threats.
-          </div>
-        )}
-        {events.map((ev, i) => (
-          <EventRow
-            key={ev.debris_name + i}
-            ev={ev}
-            selected={selectedEvent?.debris_name === ev.debris_name}
-            onClick={() => setSelectedEvent(
-              selectedEvent?.debris_name === ev.debris_name ? null : ev
+      {!collapsed && (
+        <>
+          {/* Event list */}
+          <div style={{ flex: selectedEvent ? '0 0 auto' : 1, overflowY: 'auto' }}>
+            {loading && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+                ⏳ Scanning 72-hour window…
+              </div>
             )}
-          />
-        ))}
-      </div>
+            {error && (
+              <div style={{ padding: '12px 14px', color: '#f87171', fontSize: '11px', lineHeight: 1.5 }}>
+                {error}
+              </div>
+            )}
+            {!loading && events.length === 0 && !error && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+                No events detected.<br />Click <strong>🔍 Scan Conjunctions</strong> to check for threats.
+              </div>
+            )}
+            {events.map((ev, i) => (
+              <EventRow
+                key={ev.debris_name + i}
+                ev={ev}
+                selected={selectedEvent?.debris_name === ev.debris_name}
+                onClick={() => setSelectedEvent(
+                  selectedEvent?.debris_name === ev.debris_name ? null : ev
+                )}
+              />
+            ))}
+          </div>
 
-      {/* Selected event detail + simulator */}
-      {selectedEvent && <EventDetail ev={selectedEvent} />}
+          {/* Selected event detail + simulator */}
+          {selectedEvent && <EventDetail ev={selectedEvent} />}
+        </>
+      )}
     </div>
   )
 }
