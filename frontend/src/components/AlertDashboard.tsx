@@ -13,9 +13,8 @@ import React, { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { api } from '../api/client'
-import type { ConjunctionEvent, RiskResponse } from '../types'
-import { RISK_COLOURS } from '../types'
-
+import type { ConjunctionEvent, RiskResponse, ApprovalStatus } from '../types'
+import { RISK_COLOURS, eventKey } from '../types'
 // ── AI insight types ─────────────────────────────────────────
 interface AIInsight {
   insight:        string
@@ -107,9 +106,14 @@ function ScoreBar({ score, colour }: { score: number; colour: string }) {
 
 // ── Manoeuvre simulator ───────────────────────────────────────
 function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
+  const { approvals, approveEvent, rejectEvent, clearApproval } = useStore()
   const [missKm, setMissKm]       = useState(ev.miss_distance_km)
   const [result, setResult]       = useState<RiskResponse | null>(null)
   const [simLoading, setSimLoading] = useState(false)
+  const [notes, setNotes] = useState('')
+
+  const key = eventKey(ev)
+  const approval = approvals[key]
 
   async function simulate(newMiss: number) {
     setMissKm(newMiss)
@@ -143,14 +147,21 @@ function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
       borderRadius: '6px',
     }}>
       <div style={{
-        fontSize: '11px',
-        fontWeight: 700,
-        color: 'var(--muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: '10px',
       }}>
-        🚀 Manoeuvre Simulator
+        <span style={{
+          fontSize: '11px',
+          fontWeight: 700,
+          color: 'var(--muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}>
+          🚀 Manoeuvre Simulator
+        </span>
+        <ApprovalBadge status={approval?.status ?? 'PENDING'} />
       </div>
 
       {/* Miss distance slider */}
@@ -210,6 +221,90 @@ function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
         fontStyle: 'italic',
       }}>
         {displayInsight}
+      </div>
+
+      {/* ── Operator approval workflow ──────────────────────── */}
+      <div style={{
+        marginTop: '12px',
+        paddingTop: '12px',
+        borderTop: '1px solid var(--border)',
+      }}>
+        <textarea
+          placeholder="Optional notes (e.g. burn timing, fuel budget considerations)…"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          style={{
+            width: '100%',
+            minHeight: '48px',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            color: 'var(--text)',
+            padding: '6px 8px',
+            fontSize: '11px',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            marginBottom: '8px',
+            outline: 'none',
+          }}
+        />
+
+        {approval ? (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', color: 'var(--muted)', flex: 1 }}>
+              Decided {new Date(approval.decided_at!).toLocaleString()} at {approval.decided_miss_km.toFixed(1)} km
+            </span>
+            <button
+              onClick={() => clearApproval(ev)}
+              style={{
+                padding: '5px 10px',
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                color: 'var(--muted)',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              Revise
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => approveEvent(ev, missKm, displayScore, notes)}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: '#16a34a',
+                border: 'none',
+                borderRadius: '5px',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              ✓ Approve Manoeuvre
+            </button>
+            <button
+              onClick={() => rejectEvent(ev, missKm, displayScore, notes)}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: '#dc2626',
+                border: 'none',
+                borderRadius: '5px',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              ✕ Reject
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -438,8 +533,28 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+function ApprovalBadge({ status }: { status: ApprovalStatus }) {
+  const cfg = {
+    PENDING:  { bg: '#292524', border: '#78716c', color: '#d6d3d1', label: '⏳ Pending Review' },
+    APPROVED: { bg: '#0f1f0f', border: '#16a34a', color: '#86efac', label: '✓ Approved' },
+    REJECTED: { bg: '#431407', border: '#dc2626', color: '#fca5a5', label: '✕ Rejected' },
+  }[status] as { bg: string; border: string; color: string; label: string }
 
-// ── Main dashboard ───────────────────────────────────────────
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '3px 10px',
+      borderRadius: '999px',
+      background: cfg.bg,
+      border: `1px solid ${cfg.border}`,
+      color: cfg.color,
+      fontSize: '11px',
+      fontWeight: 700,
+    }}>
+      {cfg.label}
+    </span>
+  )
+}
 // ── Main dashboard ───────────────────────────────────────────
 export function AlertDashboard() {
   const { events, selectedEvent, setSelectedEvent, loading, error } = useStore()

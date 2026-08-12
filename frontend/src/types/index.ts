@@ -201,3 +201,18 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     },
   },
 ]
+// ── Operator approval workflow ──────────────────────────────
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface ApprovalRecord {
+  event_key:        string          // unique id for the event (debris_name + tca)
+  status:           ApprovalStatus
+  decided_at:       string | null   // ISO timestamp, null if still pending
+  decided_miss_km:  number          // the simulated miss distance at time of decision
+  decided_score:    number          // the resulting risk score at time of decision
+  notes:            string          // optional operator note
+}
+
+export function eventKey(ev: { debris_name: string; tca: string }): string {
+  return `${ev.debris_name}__${ev.tca}`
+}

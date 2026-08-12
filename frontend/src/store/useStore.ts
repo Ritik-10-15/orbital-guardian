@@ -6,9 +6,9 @@
 import { create } from 'zustand'
 import type {
   ConjunctionEvent, LiveFrame, OrbitPoint, TLESchema,
-  FleetMember, RiskLevel,
+  FleetMember, RiskLevel,ApprovalRecord,
 } from '../types'
-import { SPACECRAFT_PRESETS } from '../types'
+import { SPACECRAFT_PRESETS, eventKey } from '../types'
 
 // ── helpers ───────────────────────────────────────────────────
 function makeId(name: string): string {
@@ -76,6 +76,11 @@ interface AppState {
   setFleetOrbitTrack: (id: string, pts: OrbitPoint[]) => void
   setFleetEvents:     (id: string, evs: ConjunctionEvent[], risk: RiskLevel, score: number) => void
   clearFleet:         () => void
+  // ── Operator approvals ────────────────────────────────────────
+  approvals:      Record<string, ApprovalRecord>
+  approveEvent:   (ev: ConjunctionEvent, missKm: number, score: number, notes?: string) => void
+  rejectEvent:    (ev: ConjunctionEvent, missKm: number, score: number, notes?: string) => void
+  clearApproval:  (ev: ConjunctionEvent) => void
 }
 
 // Default ISS TLE
@@ -177,4 +182,50 @@ export const useStore = create<AppState>((set, get) => ({
     })),
 
   clearFleet: () => set({ fleet: INITIAL_FLEET, activeFleetId: INITIAL_FLEET[0].id }),
+
+  // ── Operator approvals ────────────────────────────────────────
+  approvals: {},
+
+  approveEvent: (ev, missKm, score, notes = '') => {
+    const key = eventKey(ev)
+    set(s => ({
+      approvals: {
+        ...s.approvals,
+        [key]: {
+          event_key: key,
+          status: 'APPROVED',
+          decided_at: new Date().toISOString(),
+          decided_miss_km: missKm,
+          decided_score: score,
+          notes,
+        },
+      },
+    }))
+  },
+
+  rejectEvent: (ev, missKm, score, notes = '') => {
+    const key = eventKey(ev)
+    set(s => ({
+      approvals: {
+        ...s.approvals,
+        [key]: {
+          event_key: key,
+          status: 'REJECTED',
+          decided_at: new Date().toISOString(),
+          decided_miss_km: missKm,
+          decided_score: score,
+          notes,
+        },
+      },
+    }))
+  },
+
+  clearApproval: (ev) => {
+    const key = eventKey(ev)
+    set(s => {
+      const next = { ...s.approvals }
+      delete next[key]
+      return { approvals: next }
+    })
+  },
 }))
