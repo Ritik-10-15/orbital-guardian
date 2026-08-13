@@ -556,9 +556,55 @@ function ApprovalBadge({ status }: { status: ApprovalStatus }) {
   )
 }
 // ── Main dashboard ───────────────────────────────────────────
+// ── Main dashboard ───────────────────────────────────────────
 export function AlertDashboard() {
   const { events, selectedEvent, setSelectedEvent, loading, error } = useStore()
   const [collapsed, setCollapsed] = useState(false)
+
+  if (collapsed) {
+    return (
+      <div style={{
+        width: '44px',
+        minWidth: '44px',
+        background: 'var(--surface)',
+        borderLeft: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        paddingTop: '10px',
+        gap: '8px',
+      }}>
+        <button
+          onClick={() => setCollapsed(false)}
+          title="Expand Conjunction Alerts panel"
+          style={{
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            color: 'var(--muted)',
+            fontSize: '12px',
+            padding: '6px 8px',
+            cursor: 'pointer',
+          }}
+        >
+          ◀
+        </button>
+        <span style={{ fontSize: '16px' }}>⚠</span>
+        {events.length > 0 && (
+          <span style={{
+            background: '#dc2626',
+            color: '#fff',
+            borderRadius: '999px',
+            width: 18, height: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '10px', fontWeight: 700,
+          }}>
+            {events.length}
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -594,7 +640,8 @@ export function AlertDashboard() {
             </span>
           )}
           <button
-            onClick={() => setCollapsed(c => !c)}
+            onClick={() => setCollapsed(true)}
+            title="Collapse Conjunction Alerts panel"
             style={{
               background: 'var(--surface2)',
               border: '1px solid var(--border)',
@@ -605,46 +652,42 @@ export function AlertDashboard() {
               cursor: 'pointer',
             }}
           >
-            {collapsed ? '▼' : '▲'}
+            ▶
           </button>
         </div>
       </div>
 
-      {!collapsed && (
-        <>
-          {/* Event list */}
-          <div style={{ flex: selectedEvent ? '0 0 auto' : 1, overflowY: 'auto' }}>
-            {loading && (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-                ⏳ Scanning 72-hour window…
-              </div>
-            )}
-            {error && (
-              <div style={{ padding: '12px 14px', color: '#f87171', fontSize: '11px', lineHeight: 1.5 }}>
-                {error}
-              </div>
-            )}
-            {!loading && events.length === 0 && !error && (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-                No events detected.<br />Click <strong>🔍 Scan Conjunctions</strong> to check for threats.
-              </div>
-            )}
-            {events.map((ev, i) => (
-              <EventRow
-                key={ev.debris_name + i}
-                ev={ev}
-                selected={selectedEvent?.debris_name === ev.debris_name}
-                onClick={() => setSelectedEvent(
-                  selectedEvent?.debris_name === ev.debris_name ? null : ev
-                )}
-              />
-            ))}
+      {/* Event list */}
+      <div style={{ flex: selectedEvent ? '0 0 auto' : 1, overflowY: 'auto' }}>
+        {loading && (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+            ⏳ Scanning 72-hour window…
           </div>
+        )}
+        {error && (
+          <div style={{ padding: '12px 14px', color: '#f87171', fontSize: '11px', lineHeight: 1.5 }}>
+            {error}
+          </div>
+        )}
+        {!loading && events.length === 0 && !error && (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+            No events detected.<br />Click <strong>🔍 Scan Conjunctions</strong> to check for threats.
+          </div>
+        )}
+        {events.map((ev, i) => (
+          <EventRow
+            key={ev.debris_name + i}
+            ev={ev}
+            selected={selectedEvent?.debris_name === ev.debris_name}
+            onClick={() => setSelectedEvent(
+              selectedEvent?.debris_name === ev.debris_name ? null : ev
+            )}
+          />
+        ))}
+      </div>
 
-          {/* Selected event detail + simulator */}
-          {selectedEvent && <EventDetail ev={selectedEvent} />}
-        </>
-      )}
+      {/* Selected event detail + simulator */}
+      {selectedEvent && <EventDetail ev={selectedEvent} />}
     </div>
   )
 }
