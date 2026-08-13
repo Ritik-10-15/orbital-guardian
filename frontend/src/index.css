@@ -29,6 +29,32 @@
   color-scheme: dark;
 }
 
+[data-theme="light"] {
+  --bg:        #f3f4f6;
+  --surface:   #ffffff;
+  --surface2:  #f0f1f3;
+  --border:    #d1d5db;
+  --text:      #111827;
+  --muted:     #6b7280;
+  --accent:    #2563eb;
+
+  --critical:  #dc2626;
+  --high:      #ea580c;
+  --moderate:  #ca8a04;
+  --low:       #16a34a;
+  --negligible:#2563eb;
+
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow: hidden;
+  transition: background-color 0.25s, color 0.25s;
+}
+
 body {
   background: var(--bg);
   color: var(--text);

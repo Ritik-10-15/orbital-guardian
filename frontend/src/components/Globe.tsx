@@ -7,7 +7,7 @@
 // ============================================================
 
 import React, { useRef, useMemo, useEffect, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
@@ -115,19 +115,24 @@ function Earth() {
   )
 }
 // ── Animated spacecraft dot ───────────────────────────────────
-// Smoothly interpolates between successive live frames
+// ── Spacecraft dots — one per active fleet member, falls back to first orbit point if no live_frame ─
 function FleetDots() {
   const { fleet, activeFleetId, setActiveFleetId } = useStore()
 
   return (
     <>
-      {fleet.filter(m => m.active && m.live_frame).map(member => {
-        const frame = member.live_frame!
-        const pos = latLonAltToVec3(frame.latitude_deg, frame.longitude_deg, frame.altitude_km)
+      {fleet.filter(m => m.active).map(member => {
+        const framePos = member.live_frame
+          ? latLonAltToVec3(member.live_frame.latitude_deg, member.live_frame.longitude_deg, member.live_frame.altitude_km)
+          : member.orbit_points.length > 0
+          ? latLonAltToVec3(member.orbit_points[0].latitude_deg, member.orbit_points[0].longitude_deg, member.orbit_points[0].altitude_km)
+          : null
+
+        if (!framePos) return null
         const isActive = member.id === activeFleetId
 
         return (
-          <group key={member.id} position={pos}>
+          <group key={member.id} position={framePos}>
             <mesh onClick={() => setActiveFleetId(member.id)}>
               <sphereGeometry args={[isActive ? 0.02 : 0.014, 16, 16]} />
               <meshBasicMaterial color={member.colour} />
@@ -144,22 +149,62 @@ function FleetDots() {
     </>
   )
 }
+// ── Camera auto-focus — smoothly rotates to the active spacecraft ──
+function CameraFocus() {
+  const { fleet, activeFleetId } = useStore()
+  const { camera } = useThree()
+  const targetPos = useRef(new THREE.Vector3())
+  const isFocusing = useRef(false)
 
-// ── Debris markers (positioned on actual orbit shell) ────────
+  useEffect(() => {
+    const active = fleet.find(m => m.id === activeFleetId)
+    if (!active) return
+
+    const framePos = active.live_frame
+      ? latLonAltToVec3(active.live_frame.latitude_deg, active.live_frame.longitude_deg, active.live_frame.altitude_km)
+      : active.orbit_points.length > 0
+      ? latLonAltToVec3(active.orbit_points[0].latitude_deg, active.orbit_points[0].longitude_deg, active.orbit_points[0].altitude_km)
+      : null
+
+    if (framePos) {
+      // Camera should end up looking at Earth from the direction of the spacecraft,
+      // pulled back to a comfortable viewing distance
+      const dir = framePos.clone().normalize()
+      targetPos.current.copy(dir.multiplyScalar(2.6))
+      isFocusing.current = true
+    }
+  }, [activeFleetId, fleet])
+
+  useFrame((_, delta) => {
+    if (!isFocusing.current) return
+    camera.position.lerp(targetPos.current, Math.min(1, delta * 1.5))
+    camera.lookAt(0, 0, 0)
+    if (camera.position.distanceTo(targetPos.current) < 0.01) {
+      isFocusing.current = false
+    }
+  })
+
+  return null
+}
+
+// ── Debris markers — aggregated across ALL active fleet members, colour-coded by risk ──
 function DebrisMarkers() {
-  const { fleet, activeFleetId, setSelectedEvent } = useStore()
-  const active = fleet.find(m => m.id === activeFleetId)
-  const events = active?.events ?? []
+  const { fleet, setSelectedEvent } = useStore()
+
+  const allMarkers = fleet
+    .filter(m => m.active)
+    .flatMap(member => member.events.slice(0, 10))
+    .slice(0, 30)
 
   return (
     <>
-      {events.slice(0, 20).map((ev, i) => {
+      {allMarkers.map((ev, i) => {
         const colour =
           ev.risk_level === 'CRITICAL' ? '#dc2626' :
           ev.risk_level === 'HIGH'     ? '#ea580c' :
           ev.risk_level === 'MODERATE' ? '#ca8a04' : '#6b7280'
 
-        const lon = (i / Math.max(events.length, 1)) * 360 - 180
+        const lon = (i / Math.max(allMarkers.length, 1)) * 360 - 180
         const lat = (i % 3 - 1) * 15
         const pos = latLonAltToVec3(lat, lon, 410)
 
@@ -173,6 +218,7 @@ function DebrisMarkers() {
     </>
   )
 }
+
 
 // ── Atmosphere glow ──────────────────────────────────────────
 function Atmosphere() {
@@ -249,6 +295,7 @@ export function Globe() {
         <OrbitTracks />
         <DebrisMarkers />
         <FleetDots />
+        <CameraFocus/>
 
         {/* Mouse controls */}
         <OrbitControls

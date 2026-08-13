@@ -20,6 +20,44 @@ function worstRisk(events: { risk_level: string }[]): RiskLevel {
 function worstScore(events: { risk_score: number }[]): number {
   return events.reduce((max, e) => Math.max(max, e.risk_score), 0)
 }
+function exportFleetCSV(fleet: ReturnType<typeof useStore.getState>['fleet']) {
+  const rows: string[] = []
+  rows.push([
+    'Spacecraft', 'Debris', 'TCA', 'Miss Distance (km)', 'Relative Velocity (km/s)',
+    'Risk Level', 'Risk Score', 'Probability of Collision', 'Hours to TCA',
+  ].join(','))
+
+  fleet.forEach(member => {
+    member.events.forEach(ev => {
+      rows.push([
+        `"${member.tle.name}"`,
+        `"${ev.debris_name}"`,
+        ev.tca,
+        ev.miss_distance_km.toFixed(3),
+        ev.relative_velocity_kms.toFixed(3),
+        ev.risk_level,
+        ev.risk_score.toFixed(1),
+        ev.probability_of_collision !== null ? (ev.probability_of_collision * 100).toFixed(3) + '%' : 'N/A',
+        ev.hours_to_tca.toFixed(2),
+      ].join(','))
+    })
+  })
+
+  if (rows.length === 1) {
+    rows.push('No conjunction events recorded')
+  }
+
+  const csv  = rows.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `orbital-guardian-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 export function FleetPanel() {
   const {
@@ -96,23 +134,42 @@ export function FleetPanel() {
       flex: 1,
       overflowY: 'auto',
     }}>
-      <button
-        onClick={handleFleetScan}
-        disabled={fleetLoading}
-        style={{
-          padding: '8px',
-          background: fleetLoading ? 'var(--surface2)' : '#1d4ed8',
-          border: 'none',
-          borderRadius: '5px',
-          color: '#fff',
-          fontWeight: 700,
-          fontSize: '12px',
-          cursor: fleetLoading ? 'not-allowed' : 'pointer',
-          opacity: fleetLoading ? 0.7 : 1,
-        }}
-      >
-        {fleetLoading ? '⏳ Scanning fleet…' : '🔍 Scan Entire Fleet'}
-      </button>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          onClick={handleFleetScan}
+          disabled={fleetLoading}
+          style={{
+            flex: 1,
+            padding: '8px',
+            background: fleetLoading ? 'var(--surface2)' : '#1d4ed8',
+            border: 'none',
+            borderRadius: '5px',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '12px',
+            cursor: fleetLoading ? 'not-allowed' : 'pointer',
+            opacity: fleetLoading ? 0.7 : 1,
+          }}
+        >
+          {fleetLoading ? '⏳ Scanning fleet…' : '🔍 Scan Entire Fleet'}
+        </button>
+        <button
+          onClick={() => exportFleetCSV(fleet)}
+          style={{
+            padding: '8px 14px',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '5px',
+            color: 'var(--text)',
+            fontWeight: 700,
+            fontSize: '12px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          📄 Export CSV
+        </button>
+      </div>
 
       {scanError && (
         <div style={{ fontSize: '11px', color: '#f87171' }}>{scanError}</div>
