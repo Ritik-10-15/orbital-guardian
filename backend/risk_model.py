@@ -131,7 +131,7 @@ def _base_score(miss_distance_km: float) -> float:
       5.0 km  → ~10
       10+ km  →  ~0
     """
-    if miss_distance_km <= 0:
+    if miss_distance_km <= 0.1:
         return 55.0
     # 55 × e^(-0.22 × d)  — tuned so 5 km ≈ 10, 10 km ≈ ~0
     return min(55.0, 55.0 * math.exp(-0.22 * miss_distance_km))

@@ -29,7 +29,7 @@ export function ControlPanel() {
   const [name,    setName]    = useState(spacecraft.name)
   const [line1,   setLine1]   = useState(spacecraft.line1)
   const [line2,   setLine2]   = useState(spacecraft.line2)
-  const [catalog, setCatalog] = useState<CatalogSource>('celestrak-stations')
+  const { catalogSource: catalog, setCatalogSource: setCatalog } = useStore()
   const [limit,   setLimit]   = useState(30)
   const [stConfigured, setStConfigured] = useState(false)
 

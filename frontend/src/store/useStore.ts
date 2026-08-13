@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import type {
   ConjunctionEvent, LiveFrame, OrbitPoint, TLESchema,
-  FleetMember, RiskLevel,ApprovalRecord,
+  FleetMember, RiskLevel, ApprovalRecord,
 } from '../types'
 import { SPACECRAFT_PRESETS, eventKey } from '../types'
 
@@ -76,6 +76,11 @@ interface AppState {
   setFleetOrbitTrack: (id: string, pts: OrbitPoint[]) => void
   setFleetEvents:     (id: string, evs: ConjunctionEvent[], risk: RiskLevel, score: number) => void
   clearFleet:         () => void
+
+  // ── Catalog source (shared between ControlPanel + FleetPanel) ─
+  catalogSource:      string
+  setCatalogSource:   (source: string) => void
+
   // ── Operator approvals ────────────────────────────────────────
   approvals:      Record<string, ApprovalRecord>
   approveEvent:   (ev: ConjunctionEvent, missKm: number, score: number, notes?: string) => void
@@ -182,6 +187,10 @@ export const useStore = create<AppState>((set, get) => ({
     })),
 
   clearFleet: () => set({ fleet: INITIAL_FLEET, activeFleetId: INITIAL_FLEET[0].id }),
+
+  // ── Catalog source ───────────────────────────────────────────
+  catalogSource: 'celestrak-stations',
+  setCatalogSource: (source) => set({ catalogSource: source }),
 
   // ── Operator approvals ────────────────────────────────────────
   approvals: {},

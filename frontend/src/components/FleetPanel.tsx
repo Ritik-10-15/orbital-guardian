@@ -1,6 +1,7 @@
 // ============================================================
 // src/components/FleetPanel.tsx
 // Option F — Fleet overview table + fleet-wide scan
+// Width-collapse + catalog-source-aware scanning
 // ============================================================
 
 import React, { useState } from 'react'
@@ -20,6 +21,7 @@ function worstRisk(events: { risk_level: string }[]): RiskLevel {
 function worstScore(events: { risk_score: number }[]): number {
   return events.reduce((max, e) => Math.max(max, e.risk_score), 0)
 }
+
 function exportFleetCSV(fleet: ReturnType<typeof useStore.getState>['fleet']) {
   const rows: string[] = []
   rows.push([
@@ -62,12 +64,13 @@ function exportFleetCSV(fleet: ReturnType<typeof useStore.getState>['fleet']) {
 export function FleetPanel() {
   const {
     fleet, setFleetLoading, setFleetEvents, fleetLoading,
-    setFleetOrbitTrack,
+    setFleetOrbitTrack, catalogSource,
   } = useStore()
 
   const [scanResult, setScanResult] = useState<FleetScanResponse | null>(null)
   const [scanError,  setScanError]  = useState<string | null>(null)
   const [showResults, setShowResults] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
   async function handleFleetScan() {
     setFleetLoading(true)
@@ -75,15 +78,34 @@ export function FleetPanel() {
     setScanResult(null)
 
     try {
-      const catalogRes = await fetch('/api/catalog/celestrak?category=stations&limit=30')
-      const catalog    = await catalogRes.json()
-      const debris     = catalog.objects ?? []
-
       const results = []
       for (const member of fleet) {
         if (!member.active) continue
         try {
-          const res = await api.conjunctions(member.tle, debris, 72, 5)
+          let debris: { name: string; line1: string; line2: string }[] = []
+
+          if (catalogSource === 'demo-debris') {
+            const params = new URLSearchParams({
+              sc_name: member.tle.name,
+              sc_line1: member.tle.line1,
+              sc_line2: member.tle.line2,
+              count: '5',
+            })
+            const debrisRes = await fetch(`/api/catalog/demo-debris?${params}`)
+            const debrisData = await debrisRes.json()
+            debris = debrisData.objects ?? []
+          } else {
+            const [source, subtype] = catalogSource.split('-') as ['celestrak' | 'spacetrack', string]
+            const url = source === 'spacetrack'
+              ? `/api/catalog/spacetrack?type=${subtype}&limit=30`
+              : `/api/catalog/celestrak?category=${subtype}&limit=30`
+            const debrisRes = await fetch(url)
+            const debrisData = await debrisRes.json()
+            debris = debrisData.objects ?? []
+          }
+
+          const screenKm = catalogSource === 'demo-debris' ? 50 : 5
+          const res = await api.conjunctions(member.tle, debris, 72, screenKm)
           const risk  = worstRisk(res.events) as RiskLevel
           const score = worstScore(res.events)
           setFleetEvents(member.id, res.events, risk, score)
@@ -125,16 +147,64 @@ export function FleetPanel() {
     }
   }
 
+  if (collapsed) {
+    return (
+      <div style={{
+        width: '44px',
+        minWidth: '44px',
+        background: 'var(--surface)',
+        borderLeft: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        paddingTop: '10px',
+        gap: '8px',
+      }}>
+        <button
+          onClick={() => setCollapsed(false)}
+          title="Expand Fleet Status panel"
+          style={{
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            color: 'var(--muted)',
+            fontSize: '12px',
+            padding: '6px 8px',
+            cursor: 'pointer',
+          }}
+        >
+          ◀
+        </button>
+        <span style={{ fontSize: '16px' }}>🔍</span>
+        {scanResult && scanResult.critical_count > 0 && (
+          <span style={{
+            background: '#dc2626',
+            color: '#fff',
+            borderRadius: '999px',
+            width: 18, height: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '10px', fontWeight: 700,
+          }}>
+            {scanResult.critical_count}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={{
+      width: '320px',
+      minWidth: '320px',
+      background: 'var(--surface)',
+      borderLeft: '1px solid var(--border)',
       padding: '12px 14px',
       display: 'flex',
       flexDirection: 'column',
       gap: '10px',
-      flex: 1,
       overflowY: 'auto',
     }}>
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button
           onClick={handleFleetScan}
           disabled={fleetLoading}
@@ -168,6 +238,21 @@ export function FleetPanel() {
           }}
         >
           📄 Export CSV
+        </button>
+        <button
+          onClick={() => setCollapsed(true)}
+          title="Collapse Fleet Status panel"
+          style={{
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            color: 'var(--muted)',
+            fontSize: '11px',
+            padding: '8px',
+            cursor: 'pointer',
+          }}
+        >
+          ▶
         </button>
       </div>
 
