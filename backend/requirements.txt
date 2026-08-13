@@ -1,22 +1,22 @@
-# ── Orbital mechanics ────────────────────────────────────────────────────────
+# ── Orbital mechanics ────────────────────────────────────────
 sgp4>=2.22                  # SGP4/SDP4 propagator — core of propagation.py
 openai>=1.30                # LLM insight generation (Option C)
 
-# ── Numerics ─────────────────────────────────────────────────────────────────
+# ── Numerics ─────────────────────────────────────────────────
 numpy>=1.26                 # Array math used in conjunction screening
+scikit-learn>=1.5           # IsolationForest anomaly detector (Option C)
 
-# ── Web framework ─────────────────────────────────────────────────────────────
-fastapi>=0.111              # REST + WebSocket API (api.py)
-uvicorn[standard]>=0.29     # ASGI server with WebSocket support
-pydantic>=2.7               # Request/response schema validation (bundled with FastAPI 2.x)
+# ── Configuration ────────────────────────────────────────────
+python-dotenv>=1.0          # Loads OPENAI_API_KEY / SPACETRACK_* from .env
 
-# ── HTTP client ───────────────────────────────────────────────────────────────
-httpx>=0.27                 # Async HTTP — fetches TLE catalogs from CelesTrak
+# ── Web framework ────────────────────────────────────────────
+fastapi>=0.111               # REST + WebSocket API (api.py)
+uvicorn[standard]>=0.29      # ASGI server with WebSocket support
+pydantic>=2.7                # Request/response schema validation (bundled with FastAPI 2.x)
 
-# ── CORS / middleware (included with FastAPI, listed for clarity) ─────────────
-starlette>=0.37             # CORS middleware, WebSocket primitives (FastAPI dependency)
+# ── HTTP client ──────────────────────────────────────────────
+httpx>=0.27                  # CelesTrak/Space-Track fetches (api.py) + test client
 
-# ── Dev / testing ─────────────────────────────────────────────────────────────
-pytest>=8.2                 # Unit tests
-pytest-asyncio>=0.23        # Async test support for FastAPI endpoints
-httpx>=0.27                 # Also used as the test client (TestClient)
+# ── Unit tests ───────────────────────────────────────────────
+pytest-asyncio>=0.23         # Async test support for FastAPI endpoints
+pytest>=8.0                  # Test runner

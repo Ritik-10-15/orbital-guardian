@@ -1,8 +1,7 @@
 """
 api.py
 ======
-FastAPI gateway for Orbital Guardian.
-
+FastAPI gateway for Orbital Guardian
 Endpoints
 ---------
   GET  /health                  — liveness probe
@@ -302,12 +301,12 @@ def _generate_demo_debris(sc_name: str, line1: str, line2: str, count: int = 5) 
     # (raan_offset_deg, mean_anomaly_offset_deg) — tuned for a spread of
     # miss distances from very close to negligible within a 72h window
     OFFSETS = [
-        (0.015, 0.05),   # near-direct pass  → CRITICAL/HIGH
-        (0.08,  0.3),    # close pass        → HIGH
-        (0.35,  1.0),    # moderate pass     → MODERATE
-        (1.2,   3.0),    # wide pass         → LOW
-        (3.5,   8.0),    # safe pass         → NEGLIGIBLE
-    ]
+    (0.0001, 0.0004),   # extreme near-hit  → CRITICAL + ANOMALY
+    (0.015,  0.05),     # near-direct pass  → CRITICAL/HIGH
+    (0.08,   0.3),      # close pass        → HIGH
+    (0.35,   1.0),      # moderate pass     → MODERATE
+    (1.2,    3.0),      # wide pass         → LOW
+]
 
     debris: List[TLE] = []
     for i in range(min(count, len(OFFSETS))):
