@@ -42,7 +42,7 @@
 │  Backend  (Python / FastAPI)                                     │
 │                                                                  │
 │  propagation.py ──► SGP4 orbit propagator (ECI state vectors)   │
-│  conjuction.py  ──► Conjunction analysis (golden-section TCA)   │
+│  conjunction.py  ──► Conjunction analysis (golden-section TCA)   │
 │  risk_model.py  ──► Risk scoring (0–100, 5 tiers, Pc)           │
 │  ai_insight.py  ──► LLM + ML anomaly detection                  │
 │  space_track.py ──► Space-Track.org authenticated client        │
@@ -213,7 +213,7 @@ pytest tests/ -v
 orbital-guardian/
 ├── backend/
 │   ├── propagation.py    # SGP4 orbital propagator
-│   ├── conjuction.py     # Conjunction detection engine
+│   ├── conjunction.py     # Conjunction detection engine
 │   ├── risk_model.py     # Risk scoring (rule-based)
 │   ├── ai_insight.py     # LLM + anomaly detection
 │   ├── space_track.py    # Space-Track.org client

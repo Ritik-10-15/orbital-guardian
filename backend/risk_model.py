@@ -12,7 +12,7 @@ and returns a RiskAssessment with:
 
 Design principles
 -----------------
-• Deliberately isolated from conjuction.py — risk logic evolves independently.
+• Deliberately isolated from conjunction.py — risk logic evolves independently.
 • score_risk() internals can be swapped for a real ML model later; nothing
   else in the pipeline changes.
 • Three input signals are used now; the architecture supports adding more
@@ -50,7 +50,7 @@ from typing import List, Optional, TYPE_CHECKING
 # Avoid circular import — ConjunctionEvent is only needed for type hints
 # and the score_event() convenience function.
 if TYPE_CHECKING:
-    from conjuction import ConjunctionEvent
+    from conjunction import ConjunctionEvent
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +305,7 @@ def score_event(event: "ConjunctionEvent") -> RiskAssessment:
 
     Parameters
     ----------
-    event : ConjunctionEvent from conjuction.py
+    event : ConjunctionEvent from conjunction.py
 
     Returns
     -------

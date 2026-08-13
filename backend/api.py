@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from propagation import TLE, Propagator, eci_to_ecef           # type: ignore[import]
-from conjuction import find_conjunctions, ConjunctionEvent      # type: ignore[import]
+from conjunction import find_conjunctions, ConjunctionEvent      # type: ignore[import]
 from risk_model import score_risk, score_events, RiskAssessment # type: ignore[import]
 from space_track import SpaceTrackClient, spacetrack_configured # type: ignore[import]
 from ai_insight import generate_insight, batch_generate_insights, AIAnalysis # type: ignore[import]
@@ -269,7 +269,71 @@ def _parse_tle_text(raw: str) -> List[TLE]:
         else:
             i += 1
     return tles
+# ---------------------------------------------------------------------------
+# Synthetic demo debris — derived from a spacecraft's own orbit for reliable
+# demo scans. NOT real tracked objects — clearly labeled DEMO-DEBRIS-*.
+# ---------------------------------------------------------------------------
 
+def _tle_checksum(line68: str) -> int:
+    """Standard TLE checksum: sum of digits, '-' counts as 1, mod 10."""
+    total = 0
+    for ch in line68:
+        if ch.isdigit():
+            total += int(ch)
+        elif ch == "-":
+            total += 1
+    return total % 10
+
+
+def _generate_demo_debris(sc_name: str, line1: str, line2: str, count: int = 5) -> List[TLE]:
+    """
+    Generate synthetic debris TLEs by perturbing the spacecraft's own RAAN
+    (orbital plane) and mean anomaly (position along orbit) by small,
+    increasing amounts. This produces a realistic spread of miss distances
+    — from a near-direct pass down to a wide, safe separation — guaranteed
+    to be relevant to whichever spacecraft is being scanned.
+    """
+    try:
+        base_raan = float(line2[17:25])
+        base_ma   = float(line2[43:51])
+    except ValueError:
+        base_raan, base_ma = 0.0, 0.0
+
+    # (raan_offset_deg, mean_anomaly_offset_deg) — tuned for a spread of
+    # miss distances from very close to negligible within a 72h window
+    OFFSETS = [
+        (0.015, 0.05),   # near-direct pass  → CRITICAL/HIGH
+        (0.08,  0.3),    # close pass        → HIGH
+        (0.35,  1.0),    # moderate pass     → MODERATE
+        (1.2,   3.0),    # wide pass         → LOW
+        (3.5,   8.0),    # safe pass         → NEGLIGIBLE
+    ]
+
+    debris: List[TLE] = []
+    for i in range(min(count, len(OFFSETS))):
+        d_raan, d_ma = OFFSETS[i]
+        new_raan = (base_raan + d_raan) % 360.0
+        new_ma   = (base_ma + d_ma) % 360.0
+
+        # Rebuild line2, replacing only the RAAN and mean-anomaly fields
+        # (columns 18-25 and 44-51), preserving everything else byte-for-byte.
+        prefix   = line2[:17]                  # up to RAAN
+        raan_str = f"{new_raan:8.4f}"
+        mid      = line2[25:43]                # eccentricity + arg perigee, unchanged
+        ma_str   = f"{new_ma:8.4f}"
+        suffix   = line2[51:68]                # mean motion + rev number, unchanged
+
+        body_68  = prefix + raan_str + mid + ma_str + suffix
+        checksum = _tle_checksum(body_68)
+        new_line2 = body_68 + str(checksum)
+
+        debris.append(TLE(
+            name=f"DEMO-DEBRIS-{i + 1}",
+            line1=line1,       # NORAD id/epoch irrelevant for propagation demo
+            line2=new_line2,
+        ))
+
+    return debris
 
 # ---------------------------------------------------------------------------
 # Built-in fallback TLE catalog (used when CelesTrak is unreachable)
@@ -617,6 +681,33 @@ async def catalog_celestrak(
         satellite_count=satellite_count,
         cached_at=datetime.now(timezone.utc).isoformat(),
         objects=[_tle_schema(t) for t in tles],
+    )
+
+    # ── 8b. Demo debris — synthetic, guaranteed-relevant catalog ──────────────
+
+@app.get("/catalog/demo-debris", response_model=CatalogSourceResponse, tags=["Catalog"])
+def catalog_demo_debris(
+    sc_name:  str = Query(..., description="Spacecraft name"),
+    sc_line1: str = Query(..., description="Spacecraft TLE line 1"),
+    sc_line2: str = Query(..., description="Spacecraft TLE line 2"),
+    count: int = Query(5, ge=1, le=5, description="Number of demo debris objects"),
+) -> CatalogSourceResponse:
+    """
+    Generate synthetic debris objects derived from the given spacecraft's
+    own orbit, guaranteed to produce a realistic spread of conjunction
+    events (CRITICAL down to NEGLIGIBLE) for reliable demos.
+
+    These are NOT real tracked objects — clearly labeled DEMO-DEBRIS-*.
+    """
+    debris = _generate_demo_debris(sc_name, sc_line1, sc_line2, count)
+    return CatalogSourceResponse(
+        source="demo",
+        category="synthetic",
+        object_count=len(debris),
+        debris_count=len(debris),
+        satellite_count=0,
+        cached_at=datetime.now(timezone.utc).isoformat(),
+        objects=[_tle_schema(t) for t in debris],
     )
 
 

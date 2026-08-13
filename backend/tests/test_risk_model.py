@@ -201,7 +201,7 @@ class TestScoreEvents:
         assert score_events([]) == []
 
     def test_returns_one_per_event(self):
-        from conjuction import ConjunctionEvent
+        from conjunction import ConjunctionEvent
         from propagation import Propagator
         from datetime import datetime, timezone, timedelta
 
@@ -235,7 +235,7 @@ class TestScoreEvents:
         assert len(assessments) == 3
 
     def test_mutates_risk_level(self):
-        from conjuction import ConjunctionEvent
+        from conjunction import ConjunctionEvent
         from propagation import Propagator
 
         ISS_TLE_LOCAL = __import__('propagation').TLE(

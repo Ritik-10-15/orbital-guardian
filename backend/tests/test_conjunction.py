@@ -1,7 +1,7 @@
 """
 tests/test_conjunction.py
 =========================
-Unit tests for conjuction.py — conjunction detection engine.
+Unit tests for conjunction.py — conjunction detection engine.
 """
 
 import sys
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 from propagation import TLE, StateVector
-from conjuction import (
+from conjunction import (
     ConjunctionEvent,
     _miss_distance,
     _relative_velocity,

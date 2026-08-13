@@ -1,5 +1,5 @@
 """
-conjuction.py
+conjunction.py
 =============
 Conjunction analysis engine for Orbital Guardian.
 
@@ -259,6 +259,12 @@ def find_conjunctions(
         if not debris_result.states:
             continue  # propagation failed (decayed object)
 
+        # Skip self-matches — comparing a spacecraft against itself in the
+        # catalog produces a trivial 0.0 km / 0.0 h "conjunction" that isn't real.
+        if debris_tle.name.strip().upper() == spacecraft_tle.name.strip().upper():
+            continue
+        if debris_tle.line1 == spacecraft_tle.line1 and debris_tle.line2 == spacecraft_tle.line2:
+            continue
         # Coarse screen
         flagged_indices = _screen_pair(sc_result, debris_result, screen_km)
 

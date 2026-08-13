@@ -6,15 +6,17 @@ import React, { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { api } from '../api/client'
 
-type CatalogSource = 'celestrak-stations' | 'celestrak-active' | 'celestrak-starlink' | 'spacetrack-debris' | 'spacetrack-all'
+type CatalogSource = 'celestrak-stations' | 'celestrak-active' | 'celestrak-starlink' | 'spacetrack-debris' | 'spacetrack-all' | 'demo-debris'
 
 const CATALOG_OPTIONS: { value: CatalogSource; label: string; desc: string }[] = [
+  { value: 'demo-debris',         label: '🎯 Demo Debris (Guaranteed)', desc: 'Synthetic near-misses for reliable demo' },
   { value: 'celestrak-stations',  label: 'CelesTrak — Stations',   desc: 'ISS, CSS + crewed vehicles (~30)' },
   { value: 'celestrak-active',    label: 'CelesTrak — Active',      desc: 'All active satellites (~6000)' },
   { value: 'celestrak-starlink',  label: 'CelesTrak — Starlink',    desc: 'Starlink constellation (~6000)' },
   { value: 'spacetrack-debris',   label: 'Space-Track — Debris ★',  desc: 'LEO debris catalog (needs account)' },
   { value: 'spacetrack-all',      label: 'Space-Track — All LEO ★', desc: 'Full LEO catalog (needs account)' },
 ]
+
 
 export function ControlPanel() {
   const {
@@ -57,37 +59,50 @@ export function ControlPanel() {
   }
 
   // ── Run conjunction scan ──────────────────────────────────────
-  async function handleScan() {
+ async function handleScan() {
     const tle = { name, line1, line2 }
     setSpacecraft(tle)
     setLoading(true)
     setError(null)
     try {
       let debrisTles: { name: string; line1: string; line2: string }[] = []
-      const [source, subtype] = catalog.split('-') as ['celestrak' | 'spacetrack', string]
 
-      if (source === 'spacetrack') {
-        const res = await fetch(`/api/catalog/spacetrack?type=${subtype}&limit=${limit}`)
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.detail ?? `Space-Track error ${res.status}`)
-        }
+      if (catalog === 'demo-debris') {
+        const params = new URLSearchParams({
+          sc_name: tle.name,
+          sc_line1: tle.line1,
+          sc_line2: tle.line2,
+          count: '5',
+        })
+        const res = await fetch(`/api/catalog/demo-debris?${params}`)
+        if (!res.ok) throw new Error(`Demo debris generation failed: ${res.status}`)
         const data = await res.json()
-        debrisTles = data.objects.slice(0, limit)
+        debrisTles = data.objects
       } else {
-        // CelesTrak
-        const category = subtype   // stations | active | starlink
-        const res = await fetch(`/api/catalog/celestrak?category=${category}&limit=${limit}`)
-        if (!res.ok) throw new Error(`CelesTrak fetch failed: ${res.status}`)
-        const data = await res.json()
-        debrisTles = data.objects.slice(0, limit)
-      }
+        const [source, subtype] = catalog.split('-') as ['celestrak' | 'spacetrack', string]
 
-      const result = await api.conjunctions(tle, debrisTles, 72, 5)
+        if (source === 'spacetrack') {
+          const res = await fetch(`/api/catalog/spacetrack?type=${subtype}&limit=${limit}`)
+          if (!res.ok) {
+            const err = await res.json()
+            throw new Error(err.detail ?? `Space-Track error ${res.status}`)
+          }
+          const data = await res.json()
+          debrisTles = data.objects.slice(0, limit)
+        } else {
+          const category = subtype
+          const res = await fetch(`/api/catalog/celestrak?category=${category}&limit=${limit}`)
+          if (!res.ok) throw new Error(`CelesTrak fetch failed: ${res.status}`)
+          const data = await res.json()
+          debrisTles = data.objects.slice(0, limit)
+        }
+      }
+      const screenKm = catalog === 'demo-debris' ? 50 : 5
+      const result = await api.conjunctions(tle, debrisTles, 72, screenKm)
       setEvents(result.events)
-      const worst = result.events[0]?.risk_level ?? 'UNKNOWN'          // ← add
-      const worstScore = result.events[0]?.risk_score ?? 0             // ← add
-      setFleetEvents(activeFleetId, result.events, worst, worstScore)  // ← add
+      const worst = result.events[0]?.risk_level ?? 'UNKNOWN'
+      const worstScore = result.events[0]?.risk_score ?? 0
+      setFleetEvents(activeFleetId, result.events, worst, worstScore)
     } catch (e) {
       const msg = (e as Error).message
       setError(
