@@ -2,13 +2,47 @@
 // src/components/FleetManager.tsx
 // Option F — Add / remove spacecraft from fleet
 // Width-collapse: shrinks to a thin strip instead of just hiding content
+// ✦ Altitude sparkline per spacecraft
 // ============================================================
 
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { SPACECRAFT_PRESETS } from '../types'
-import type { TLESchema } from '../types'
+import type { TLESchema, OrbitPoint } from '../types'
+
+// ── Inline SVG altitude sparkline ────────────────────────────
+function AltSparkline({ points, colour }: { points: OrbitPoint[]; colour: string }) {
+  if (points.length < 2) return null
+
+  const W = 120, H = 22
+  const alts = points.map(p => p.altitude_km)
+  const min = Math.min(...alts)
+  const max = Math.max(...alts)
+  const range = max - min || 1
+
+  const step = W / (points.length - 1)
+  const d = alts
+    .map((alt, i) => {
+      const x = i * step
+      const y = H - ((alt - min) / range) * (H - 3) - 1
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  return (
+    <svg width={W} height={H} style={{ display: 'block', overflow: 'visible' }}>
+      <path d={d} fill="none" stroke={colour} strokeWidth="1.5" strokeOpacity="0.8" />
+      {/* Current position dot — last point */}
+      <circle
+        cx={(alts.length - 1) * step}
+        cy={H - ((alts[alts.length - 1] - min) / range) * (H - 3) - 1}
+        r="2.5"
+        fill={colour}
+      />
+    </svg>
+  )
+}
 
 export function FleetManager() {
   const { fleet, addToFleet, removeFromFleet, toggleFleetMember, activeFleetId, setActiveFleetId } = useStore()
@@ -249,6 +283,13 @@ export function FleetManager() {
                 </span>
                 <RiskBadge level={member.risk_level} score={member.risk_score > 0 ? member.risk_score : undefined} size="sm" />
               </div>
+
+              {/* Altitude sparkline */}
+              {member.orbit_points.length >= 2 && (
+                <div style={{ marginBottom: '4px' }}>
+                  <AltSparkline points={member.orbit_points} colour={member.colour} />
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>

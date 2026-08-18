@@ -2,9 +2,10 @@
 // src/components/FleetPanel.tsx
 // Option F — Fleet overview table + fleet-wide scan
 // Width-collapse + catalog-source-aware scanning
+// ✦ Auto-refresh polling with configurable interval
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { api } from '../api/client'
@@ -61,16 +62,27 @@ function exportFleetCSV(fleet: ReturnType<typeof useStore.getState>['fleet']) {
   URL.revokeObjectURL(url)
 }
 
+const POLL_OPTIONS = [
+  { label: 'Off',   value: 0    },
+  { label: '5 min', value: 5    },
+  { label: '15 min',value: 15   },
+  { label: '30 min',value: 30   },
+]
+
 export function FleetPanel() {
   const {
     fleet, setFleetLoading, setFleetEvents, fleetLoading,
     setFleetOrbitTrack, catalogSource,
   } = useStore()
 
-  const [scanResult, setScanResult] = useState<FleetScanResponse | null>(null)
-  const [scanError,  setScanError]  = useState<string | null>(null)
-  const [showResults, setShowResults] = useState(true)
-  const [collapsed, setCollapsed] = useState(false)
+  const [scanResult,   setScanResult]   = useState<FleetScanResponse | null>(null)
+  const [scanError,    setScanError]    = useState<string | null>(null)
+  const [showResults,  setShowResults]  = useState(true)
+  const [collapsed,    setCollapsed]    = useState(false)
+  const [pollInterval, setPollInterval] = useState(0)       // minutes; 0 = off
+  const [nextScanIn,   setNextScanIn]   = useState<number>(0) // seconds until next auto-scan
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function handleFleetScan() {
     setFleetLoading(true)
@@ -147,6 +159,37 @@ export function FleetPanel() {
     }
   }
 
+  // ── Auto-refresh polling ─────────────────────────────────────
+  useEffect(() => {
+    // Clear any existing timers
+    if (pollRef.current)      clearInterval(pollRef.current)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+
+    if (pollInterval === 0) {
+      setNextScanIn(0)
+      return
+    }
+
+    const intervalMs = pollInterval * 60 * 1000
+    setNextScanIn(pollInterval * 60)
+
+    // Countdown ticker (every second)
+    countdownRef.current = setInterval(() => {
+      setNextScanIn(s => (s > 0 ? s - 1 : 0))
+    }, 1000)
+
+    // Main scan trigger
+    pollRef.current = setInterval(() => {
+      handleFleetScan()
+      setNextScanIn(pollInterval * 60)
+    }, intervalMs)
+
+    return () => {
+      if (pollRef.current)      clearInterval(pollRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [pollInterval])
+
   if (collapsed) {
     return (
       <div style={{
@@ -204,7 +247,7 @@ export function FleetPanel() {
       gap: '10px',
       overflowY: 'auto',
     }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={handleFleetScan}
           disabled={fleetLoading}
@@ -223,6 +266,29 @@ export function FleetPanel() {
         >
           {fleetLoading ? '⏳ Scanning fleet…' : '🔍 Scan Entire Fleet'}
         </button>
+
+        {/* Auto-refresh selector */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+          <select
+            value={pollInterval}
+            onChange={e => setPollInterval(Number(e.target.value))}
+            title="Auto-refresh interval"
+            style={{
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: '4px', color: pollInterval > 0 ? '#22c55e' : 'var(--muted)',
+              fontSize: '11px', padding: '6px 4px', cursor: 'pointer',
+            }}
+          >
+            {POLL_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>🔄 {o.label}</option>
+            ))}
+          </select>
+          {pollInterval > 0 && nextScanIn > 0 && (
+            <span style={{ fontSize: '9px', color: '#22c55e', fontFamily: 'monospace' }}>
+              next {Math.floor(nextScanIn / 60)}:{String(nextScanIn % 60).padStart(2,'0')}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => exportFleetCSV(fleet)}
           style={{

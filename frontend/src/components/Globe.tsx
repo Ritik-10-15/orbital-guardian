@@ -4,6 +4,7 @@
 //   ✦ NASA Blue Marble texture + animated dot
 //   ✦ Multi-spacecraft fleet — all members rendered simultaneously
 //   ✦ Each fleet member has its own colour + orbit track
+//   ✦ Debris markers placed at real conjunction geometry
 // ============================================================
 
 import React, { useRef, useMemo, useEffect, useState } from 'react'
@@ -11,7 +12,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
-import type { LiveFrame } from '../types'
+import type { LiveFrame, ConjunctionEvent } from '../types'
 
 const EARTH_RADIUS = 1
 const SCALE        = 1 / 6371   // km → scene units
@@ -117,12 +118,20 @@ function Earth() {
 // ── Animated spacecraft dot ───────────────────────────────────
 // ── Spacecraft dots — one per active fleet member, falls back to first orbit point if no live_frame ─
 function FleetDots() {
-  const { fleet, activeFleetId, setActiveFleetId } = useStore()
+  const { fleet, activeFleetId, setActiveFleetId, scrubberIndex, scrubberActive } = useStore()
 
   return (
     <>
       {fleet.filter(m => m.active).map(member => {
-        const framePos = member.live_frame
+        // When scrubber is active for this member, use the scrubbed position
+        const isActiveMember = member.id === activeFleetId
+        const scrubPoint = (scrubberActive || scrubberIndex > 0) && isActiveMember && member.orbit_points.length > 0
+          ? member.orbit_points[Math.min(scrubberIndex, member.orbit_points.length - 1)]
+          : null
+
+        const framePos = scrubPoint
+          ? latLonAltToVec3(scrubPoint.latitude_deg, scrubPoint.longitude_deg, scrubPoint.altitude_km)
+          : member.live_frame
           ? latLonAltToVec3(member.live_frame.latitude_deg, member.live_frame.longitude_deg, member.live_frame.altitude_km)
           : member.orbit_points.length > 0
           ? latLonAltToVec3(member.orbit_points[0].latitude_deg, member.orbit_points[0].longitude_deg, member.orbit_points[0].altitude_km)
@@ -187,29 +196,68 @@ function CameraFocus() {
   return null
 }
 
-// ── Debris markers — aggregated across ALL active fleet members, colour-coded by risk ──
+// ── Debris markers — placed near the owning spacecraft's orbital position ──
+//
+// Each debris event is placed at the spacecraft's lat/lon but at a slightly
+// different altitude and longitude derived from the conjunction's hours_to_tca
+// and miss_distance_km, so markers orbit in the same shell as the spacecraft
+// rather than being randomly distributed around the globe.
 function DebrisMarkers() {
   const { fleet, setSelectedEvent } = useStore()
 
-  const allMarkers = fleet
-    .filter(m => m.active)
-    .flatMap(member => member.events.slice(0, 10))
-    .slice(0, 30)
+  // Collect (event, referenceFrame) pairs — only events from active members
+  // that have a known current position
+  const markers: Array<{
+    ev: ConjunctionEvent
+    lat: number
+    lon: number
+    alt: number
+    colour: string
+    key: string
+  }> = []
+
+  fleet.filter(m => m.active).forEach(member => {
+    const frame = member.live_frame ?? (
+      member.orbit_points.length > 0 ? member.orbit_points[0] : null
+    )
+    if (!frame) return
+
+    member.events.slice(0, 10).forEach((ev, i) => {
+      const colour =
+        ev.risk_level === 'CRITICAL' ? '#dc2626' :
+        ev.risk_level === 'HIGH'     ? '#ea580c' :
+        ev.risk_level === 'MODERATE' ? '#ca8a04' : '#6b7280'
+
+      // Spread debris markers around the spacecraft's current position:
+      //   • longitude offset — proportional to hours_to_tca so nearer threats
+      //     appear closer to the spacecraft dot, distant ones further along the track
+      //   • altitude offset — proportional to miss_distance_km (1 km ≈ 0.05 scene units)
+      //     so high-miss-distance events appear slightly above/below the orbit shell
+      //   • latitude offset — small spread so stacked events don't overlap
+      const lonOffset = ((ev.hours_to_tca % 90) / 90) * 120 - 60   // –60 … +60 °
+      const latOffset = (i % 5 - 2) * 2.5                           // –5 … +5 °
+      const altOffset = Math.min(ev.miss_distance_km * 2, 40)        // 0 … +40 km above s/c
+
+      markers.push({
+        ev,
+        lat: frame.latitude_deg  + latOffset,
+        lon: frame.longitude_deg + lonOffset,
+        alt: frame.altitude_km   + altOffset,
+        colour,
+        key: `${member.id}__${ev.debris_name}__${i}`,
+      })
+    })
+  })
+
+  // Cap total at 30 to keep render cost bounded
+  const visible = markers.slice(0, 30)
 
   return (
     <>
-      {allMarkers.map((ev, i) => {
-        const colour =
-          ev.risk_level === 'CRITICAL' ? '#dc2626' :
-          ev.risk_level === 'HIGH'     ? '#ea580c' :
-          ev.risk_level === 'MODERATE' ? '#ca8a04' : '#6b7280'
-
-        const lon = (i / Math.max(allMarkers.length, 1)) * 360 - 180
-        const lat = (i % 3 - 1) * 15
-        const pos = latLonAltToVec3(lat, lon, 410)
-
+      {visible.map(({ ev, lat, lon, alt, colour, key }) => {
+        const pos = latLonAltToVec3(lat, lon, alt)
         return (
-          <mesh key={ev.debris_name + i} position={pos} onClick={() => setSelectedEvent(ev)}>
+          <mesh key={key} position={pos} onClick={() => setSelectedEvent(ev)}>
             <octahedronGeometry args={[0.016]} />
             <meshBasicMaterial color={colour} />
           </mesh>

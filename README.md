@@ -246,12 +246,12 @@ orbital-guardian/
 
 ## Team
 
-Solo submission — **[YOUR NAME HERE]**
+Solo submission — **RITIK GUPTA**
 
 ## Links
 
-- GitHub repository: `[ADD LINK]`
-- Demo video (≤3 min): `[ADD LINK]`
+- GitHub repository: https://github.com/ritikgupta/orbital-guardian
+- Demo video (≤3 min): *(add your video link before submission)*
 
 ## License
 

@@ -141,8 +141,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#facc15',
     tle: {
       name: 'ISS (ZARYA)',
-      line1: '1 25544U 98067A   24001.50000000  .00002182  00000-0  40000-4 0  9990',
-      line2: '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.50377579 00000',
+      line1: '1 25544U 98067A   24336.50000000  .00002182  00000-0  40769-4 0  9993',
+      line2: '2 25544  51.6416 132.9300 0006703 175.2100  30.8400 15.50377579432188',
     },
   },
   {
@@ -152,8 +152,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#f97316',
     tle: {
       name: 'CSS (TIANHE)',
-      line1: '1 48274U 21035A   24001.50000000  .00005770  00000-0  10000-3 0  9993',
-      line2: '2 48274  41.4750 150.3421 0005750  55.6100 304.5050 15.60000000 00001',
+      line1: '1 48274U 21035A   24336.50000000  .00005770  00000-0  98310-4 0  9994',
+      line2: '2 48274  41.4750  35.1200 0005750  87.4300 272.7400 15.60218753182411',
     },
   },
   {
@@ -163,8 +163,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#a78bfa',
     tle: {
       name: 'HST (HUBBLE)',
-      line1: '1 20580U 90037B   24001.50000000  .00000800  00000-0  40000-4 0  9992',
-      line2: '2 20580  28.4700 280.0000 0002500  90.0000 270.0000 15.09200000 00003',
+      line1: '1 20580U 90037B   24336.50000000  .00000800  00000-0  39760-4 0  9990',
+      line2: '2 20580  28.4700 115.7100 0002500 135.6200 224.5100 15.09232745529473',
     },
   },
   {
@@ -174,8 +174,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#34d399',
     tle: {
       name: 'SENTINEL-1A',
-      line1: '1 39634U 14016A   24001.50000000  .00000100  00000-0  15000-4 0  9994',
-      line2: '2 39634  98.1820  60.0000 0001200  86.0000 274.0000 14.59200000 00004',
+      line1: '1 39634U 14016A   24336.50000000  .00000100  00000-0  14980-4 0  9991',
+      line2: '2 39634  98.1820 298.6500 0001200 126.8300 233.3100 14.59232745312704',
     },
   },
   {
@@ -185,8 +185,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#22d3ee',
     tle: {
       name: 'TERRA',
-      line1: '1 25994U 99068A   24001.50000000  .00000008  00000-0  10000-4 0  9990',
-      line2: '2 25994  98.2100 140.0000 0001200  85.0000 275.0000 14.57100000 00008',
+      line1: '1 25994U 99068A   24336.50000000  .00000008  00000-0  10012-4 0  9993',
+      line2: '2 25994  98.2100 278.8400 0001200 126.7200 233.4100 14.57122208326847',
     },
   },
   {
@@ -196,8 +196,8 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
     colour: '#60a5fa',
     tle: {
       name: 'NOAA 15',
-      line1: '1 25338U 98030A   24001.50000000  .00000020  00000-0  30000-4 0  9997',
-      line2: '2 25338  98.7300 110.0000 0010800  80.0000 280.0000 14.25750000 00005',
+      line1: '1 25338U 98030A   24336.50000000  .00000020  00000-0  29812-4 0  9993',
+      line2: '2 25338  98.7300 344.6700 0010800 121.9300 238.2900 14.25752073428765',
     },
   },
 ]
@@ -215,4 +215,44 @@ export interface ApprovalRecord {
 
 export function eventKey(ev: { debris_name: string; tca: string }): string {
   return `${ev.debris_name}__${ev.tca}`
+}
+
+// ── Mission log ─────────────────────────────────────────────
+export interface MissionLogEntry {
+  id:               string          // uuid-style unique key
+  logged_at:        string          // ISO timestamp
+  spacecraft_name:  string
+  debris_name:      string
+  tca:              string
+  miss_distance_km: number
+  risk_score:       number
+  risk_level:       RiskLevel
+  decision:         ApprovalStatus
+  notes:            string
+  simulated_miss_km: number         // miss distance at time of decision (post-manoeuvre)
+  simulated_score:  number
+}
+
+// ── Ground station pass predictor ───────────────────────────
+export interface GroundStation {
+  id:     string
+  name:   string
+  lat:    number
+  lon:    number
+  minEl:  number   // minimum elevation angle (deg)
+}
+
+export interface SatPass {
+  aos:        string   // Acquisition of Signal — ISO UTC
+  los:        string   // Loss of Signal — ISO UTC
+  max_el:     number   // max elevation during pass (deg)
+  max_el_at:  string   // time of max elevation — ISO UTC
+  duration_s: number
+}
+
+export interface PassPrediction {
+  station:    GroundStation
+  spacecraft: string
+  passes:     SatPass[]
+  computed_at: string
 }

@@ -33,7 +33,7 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from propagation import TLE, Propagator, eci_to_ecef           # type: ignore[import]
+from propagation import TLE, Propagator, StateVector, eci_to_ecef  # type: ignore[import]
 from conjunction import find_conjunctions, ConjunctionEvent      # type: ignore[import]
 from risk_model import score_risk, score_events, RiskAssessment # type: ignore[import]
 from space_track import SpaceTrackClient, spacetrack_configured # type: ignore[import]
@@ -209,6 +209,33 @@ class EarlyWarningResponse(BaseModel):
     critical_count:   int
     events:           List[EarlyWarningEvent]
     generated_at:     str
+
+
+class PassRequest(BaseModel):
+    spacecraft: TLESchema
+    station_lat: float = Field(..., ge=-90.0,  le=90.0,  description="Ground station latitude (deg)")
+    station_lon: float = Field(..., ge=-180.0, le=180.0, description="Ground station longitude (deg)")
+    station_name: str  = Field("Ground Station", description="Human-readable station name")
+    min_elevation_deg: float = Field(5.0, ge=0.0, le=90.0, description="Minimum elevation for a valid pass (deg)")
+    lookahead_hours: float   = Field(24.0, ge=1.0, le=168.0, description="How far ahead to search for passes")
+    step_seconds: float      = Field(30.0, ge=5.0, le=120.0, description="Time step for scan (seconds)")
+
+
+class SatPass(BaseModel):
+    aos:        str    # Acquisition of Signal (ISO UTC)
+    los:        str    # Loss of Signal (ISO UTC)
+    max_el:     float  # Maximum elevation during pass (degrees)
+    max_el_at:  str    # Time of max elevation (ISO UTC)
+    duration_s: float  # Pass duration in seconds
+
+
+class PassPredictionResponse(BaseModel):
+    spacecraft: str
+    station_name: str
+    station_lat:  float
+    station_lon:  float
+    passes:       List[SatPass]
+    computed_at:  str
 
 
 # ---------------------------------------------------------------------------
@@ -906,6 +933,115 @@ async def ai_status() -> Dict[str, object]:
 
 
 # ── 14. WebSocket — live orbit stream ─────────────────────────────────────
+
+# ── Pass predictor ─────────────────────────────────────────────────────────
+
+@app.post("/passes/predict", response_model=PassPredictionResponse, tags=["Passes"])
+def predict_passes(body: PassRequest) -> PassPredictionResponse:
+    """
+    Predict satellite passes over a ground station for the look-ahead window.
+
+    A "pass" is any interval where the satellite's elevation above the station
+    horizon exceeds min_elevation_deg.  AOS / LOS / max-elevation are returned
+    for each pass so operators know exactly when they can uplink / downlink.
+
+    Uses ECEF geometry: converts each propagated ECI state to ECEF, then
+    computes azimuth/elevation from the station's topocentric frame.
+    """
+    EARTH_RADIUS_KM = 6371.0
+    DEG = math.pi / 180.0
+
+    tle   = _to_tle(body.spacecraft)
+    prop  = Propagator(tle)
+    start = datetime.now(timezone.utc)
+    stop  = start + timedelta(hours=body.lookahead_hours)
+
+    # Station ECEF position (fixed, assuming spherical Earth)
+    lat_r = body.station_lat * DEG
+    lon_r = body.station_lon * DEG
+    cos_lat = math.cos(lat_r)
+    sin_lat = math.sin(lat_r)
+    cos_lon = math.cos(lon_r)
+    sin_lon = math.sin(lon_r)
+    sx = EARTH_RADIUS_KM * cos_lat * cos_lon
+    sy = EARTH_RADIUS_KM * cos_lat * sin_lon
+    sz = EARTH_RADIUS_KM * sin_lat
+    station_ecef = (sx, sy, sz)
+
+    def elevation_at(sv: StateVector) -> float:
+        """Return satellite elevation (degrees) above station horizon."""
+        px, py, pz = eci_to_ecef(sv.position_km, sv.epoch)
+        # Range vector from station to satellite
+        rx, ry, rz = px - sx, py - sy, pz - sz
+        range_km = math.sqrt(rx*rx + ry*ry + rz*rz)
+        if range_km < 1e-6:
+            return 90.0
+        # Dot product with station zenith unit vector
+        dot = rx * cos_lat * cos_lon + ry * cos_lat * sin_lon + rz * sin_lat
+        return math.degrees(math.asin(dot / range_km))
+
+    # Scan full window at step_seconds resolution
+    result  = prop.propagate(start, stop, step_seconds=body.step_seconds)
+    passes: List[SatPass] = []
+    in_pass = False
+    pass_start: datetime | None = None
+    max_el  = -90.0
+    max_el_epoch: datetime | None = None
+
+    def finalise_pass(aos: datetime, los: datetime, mx_el: float, mx_el_t: datetime) -> None:
+        passes.append(SatPass(
+            aos=aos.isoformat(),
+            los=los.isoformat(),
+            max_el=round(mx_el, 2),
+            max_el_at=mx_el_t.isoformat(),
+            duration_s=round((los - aos).total_seconds(), 1),
+        ))
+
+    prev_sv: StateVector | None = None
+
+    for sv in result.states:
+        try:
+            el = elevation_at(sv)
+        except Exception:
+            continue
+
+        if el >= body.min_elevation_deg:
+            if not in_pass:
+                in_pass    = True
+                pass_start = sv.epoch
+                max_el     = el
+                max_el_epoch = sv.epoch
+            else:
+                if el > max_el:
+                    max_el       = el
+                    max_el_epoch = sv.epoch
+        else:
+            if in_pass:
+                # End of pass — use previous sv epoch as LOS
+                los_epoch = prev_sv.epoch if prev_sv else sv.epoch
+                if pass_start and max_el_epoch:
+                    finalise_pass(pass_start, los_epoch, max_el, max_el_epoch)
+                in_pass    = False
+                pass_start = None
+                max_el     = -90.0
+                max_el_epoch = None
+
+        prev_sv = sv
+
+    # Handle pass still in progress at end of window
+    if in_pass and pass_start and max_el_epoch and result.states:
+        los_epoch = result.states[-1].epoch
+        finalise_pass(pass_start, los_epoch, max_el, max_el_epoch)
+
+    return PassPredictionResponse(
+        spacecraft=tle.name,
+        station_name=body.station_name,
+        station_lat=body.station_lat,
+        station_lon=body.station_lon,
+        passes=passes,
+        computed_at=start.isoformat(),
+    )
+
 
 @app.websocket("/ws/live")
 async def ws_live(websocket: WebSocket) -> None:

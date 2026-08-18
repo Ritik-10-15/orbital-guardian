@@ -13,6 +13,10 @@ import { ControlPanel }    from './components/ControlPanel'
 import { HeatmapPanel }    from './components/HeatmapPanel'
 import { FleetManager }    from './components/FleetManager'
 import { FleetPanel }      from './components/FleetPanel'
+import { TCAOverlay }      from './components/TCAOverlay'
+import { OrbitScrubber }   from './components/OrbitScrubber'
+import { MissionLog }      from './components/MissionLog'
+import { PassPredictor }   from './components/PassPredictor'
 
 // ── Beep sound (Web Audio API — no external file needed) ─────
 function playBeep() {
@@ -182,6 +186,12 @@ export default function App() {
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <Globe />
 
+          {/* TCA countdown overlay — top right of globe */}
+          <TCAOverlay />
+
+          {/* Orbit playback scrubber — bottom of globe */}
+          <OrbitScrubber />
+
           {/* Heatmap panel — bottom left of globe */}
           <HeatmapPanel />
 
@@ -220,6 +230,12 @@ export default function App() {
 
         {/* Alert dashboard — fixed right panel */}
         <AlertDashboard />
+
+        {/* Mission log — operator decision audit trail */}
+        <MissionLog />
+
+        {/* Pass predictor — ground station contact windows */}
+        <PassPredictor />
       </div>
 
       {/* ── Bottom control panel ────────────────────────────── */}

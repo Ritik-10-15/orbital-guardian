@@ -1,12 +1,14 @@
 // ============================================================
 // src/store/useStore.ts
 // Global Zustand store — Option F: fleet management added
+// Approvals + mission log are persisted to localStorage
 // ============================================================
 
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
   ConjunctionEvent, LiveFrame, OrbitPoint, TLESchema,
-  FleetMember, RiskLevel, ApprovalRecord,
+  FleetMember, RiskLevel, ApprovalRecord, MissionLogEntry,
 } from '../types'
 import { SPACECRAFT_PRESETS, eventKey } from '../types'
 
@@ -86,13 +88,24 @@ interface AppState {
   approveEvent:   (ev: ConjunctionEvent, missKm: number, score: number, notes?: string) => void
   rejectEvent:    (ev: ConjunctionEvent, missKm: number, score: number, notes?: string) => void
   clearApproval:  (ev: ConjunctionEvent) => void
+
+  // ── Mission log ───────────────────────────────────────────────
+  missionLog:     MissionLogEntry[]
+  addLogEntry:    (entry: Omit<MissionLogEntry, 'id' | 'logged_at'>) => void
+  clearLog:       () => void
+
+  // ── Orbit playback scrubber ───────────────────────────────────
+  scrubberIndex:     number        // index into orbit_points of active member
+  scrubberActive:    boolean       // true while user is dragging
+  setScrubberIndex:  (i: number) => void
+  setScrubberActive: (v: boolean) => void
 }
 
-// Default ISS TLE
+// Default ISS TLE — epoch: 2024-Dec-01 (day 336)
 const ISS: TLESchema = {
   name:  'ISS (ZARYA)',
-  line1: '1 25544U 98067A   24001.50000000  .00002182  00000-0  40000-4 0  9990',
-  line2: '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.50377579 00000',
+  line1: '1 25544U 98067A   24336.50000000  .00002182  00000-0  40769-4 0  9993',
+  line2: '2 25544  51.6416 132.9300 0006703 175.2100  30.8400 15.50377579432188',
 }
 
 // Seed the fleet with ISS on load
@@ -100,7 +113,9 @@ const INITIAL_FLEET: FleetMember[] = [
   makeMember(ISS, '#facc15'),
 ]
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
   // ── Legacy single-spacecraft state ──────────────────────────
   spacecraft:    ISS,
   setSpacecraft: (tle) => set({ spacecraft: tle }),
@@ -197,35 +212,56 @@ export const useStore = create<AppState>((set, get) => ({
 
   approveEvent: (ev, missKm, score, notes = '') => {
     const key = eventKey(ev)
+    const now = new Date().toISOString()
+    // find spacecraft name for log
+    const scName = get().fleet.find(m => m.events.some(e => eventKey(e) === key))?.tle.name
+                   ?? get().spacecraft.name
     set(s => ({
       approvals: {
         ...s.approvals,
-        [key]: {
-          event_key: key,
-          status: 'APPROVED',
-          decided_at: new Date().toISOString(),
-          decided_miss_km: missKm,
-          decided_score: score,
-          notes,
-        },
+        [key]: { event_key: key, status: 'APPROVED', decided_at: now, decided_miss_km: missKm, decided_score: score, notes },
       },
+      missionLog: [{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+        logged_at: now,
+        spacecraft_name:  scName,
+        debris_name:      ev.debris_name,
+        tca:              ev.tca,
+        miss_distance_km: ev.miss_distance_km,
+        risk_score:       ev.risk_score,
+        risk_level:       ev.risk_level,
+        decision:         'APPROVED' as const,
+        notes,
+        simulated_miss_km: missKm,
+        simulated_score:   score,
+      }, ...s.missionLog].slice(0, 200),
     }))
   },
 
   rejectEvent: (ev, missKm, score, notes = '') => {
     const key = eventKey(ev)
+    const now = new Date().toISOString()
+    const scName = get().fleet.find(m => m.events.some(e => eventKey(e) === key))?.tle.name
+                   ?? get().spacecraft.name
     set(s => ({
       approvals: {
         ...s.approvals,
-        [key]: {
-          event_key: key,
-          status: 'REJECTED',
-          decided_at: new Date().toISOString(),
-          decided_miss_km: missKm,
-          decided_score: score,
-          notes,
-        },
+        [key]: { event_key: key, status: 'REJECTED', decided_at: now, decided_miss_km: missKm, decided_score: score, notes },
       },
+      missionLog: [{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+        logged_at: now,
+        spacecraft_name:  scName,
+        debris_name:      ev.debris_name,
+        tca:              ev.tca,
+        miss_distance_km: ev.miss_distance_km,
+        risk_score:       ev.risk_score,
+        risk_level:       ev.risk_level,
+        decision:         'REJECTED' as const,
+        notes,
+        simulated_miss_km: missKm,
+        simulated_score:   score,
+      }, ...s.missionLog].slice(0, 200),
     }))
   },
 
@@ -237,4 +273,35 @@ export const useStore = create<AppState>((set, get) => ({
       return { approvals: next }
     })
   },
-}))
+
+  // ── Mission log ──────────────────────────────────────────────
+  missionLog: [],
+  addLogEntry: (entry) => set(s => ({
+    missionLog: [
+      {
+        ...entry,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        logged_at: new Date().toISOString(),
+      },
+      ...s.missionLog,
+    ].slice(0, 200),
+  })),
+  clearLog: () => set({ missionLog: [] }),
+
+  // ── Orbit playback scrubber ──────────────────────────────────
+  scrubberIndex:     0,
+  scrubberActive:    false,
+  setScrubberIndex:  (i) => set({ scrubberIndex: i }),
+  setScrubberActive: (v) => set({ scrubberActive: v }),
+    }),
+    {
+      name: 'orbital-guardian-store',
+      storage: createJSONStorage(() => localStorage),
+      // Persist approvals + mission log — fleet/live data is always transient
+      partialize: (state) => ({
+        approvals:  state.approvals,
+        missionLog: state.missionLog,
+      }),
+    },
+  )
+)
