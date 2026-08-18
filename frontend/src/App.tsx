@@ -182,8 +182,8 @@ export default function App() {
       {/* ── Main content ────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-        {/* 3D Globe — takes all remaining width */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        {/* 3D Globe — takes all remaining width, always at least 400px */}
+        <div style={{ flex: 1, position: 'relative', minWidth: '400px' }}>
           <Globe />
 
           {/* TCA countdown overlay — top right of globe */}

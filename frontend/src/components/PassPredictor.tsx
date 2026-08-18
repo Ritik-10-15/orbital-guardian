@@ -109,7 +109,7 @@ function PassRow({ pass, i }: { pass: SatPass; i: number }) {
 
 export function PassPredictor() {
   const { fleet, activeFleetId } = useStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)   // starts collapsed
 
   const activeMember = fleet.find(m => m.id === activeFleetId) ?? fleet[0]
 

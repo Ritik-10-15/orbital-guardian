@@ -9,6 +9,8 @@ import { useStore } from '../store/useStore'
 import type { MissionLogEntry } from '../types'
 import { RISK_COLOURS } from '../types'
 
+// Starts collapsed — only expands when user clicks the strip
+
 function exportLogCSV(log: MissionLogEntry[]) {
   const rows: string[] = []
   rows.push([
@@ -142,7 +144,7 @@ function LogRow({ entry }: { entry: MissionLogEntry }) {
 
 export function MissionLog() {
   const { missionLog, clearLog } = useStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)   // starts collapsed
   const [filter, setFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED'>('ALL')
 
   const filtered = filter === 'ALL' ? missionLog : missionLog.filter(e => e.decision === filter)
