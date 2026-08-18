@@ -4,7 +4,7 @@
 // spacecraft dot along its pre-propagated orbit track
 // ============================================================
 
-import React, { useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 
 export function OrbitScrubber() {
@@ -15,27 +15,37 @@ export function OrbitScrubber() {
     orbitPoints,
   } = useStore()
 
+  // ── Local play/pause — starts PAUSED so loading orbit doesn't auto-animate ──
+  const [playing, setPlaying] = useState(false)
+
   const activeMember = fleet.find(m => m.id === activeFleetId)
   const points = activeMember?.orbit_points ?? orbitPoints
+
+  // Reset to start and pause whenever new orbit points are loaded
+  useEffect(() => {
+    setScrubberIndex(0)
+    setPlaying(false)
+  }, [points.length])
+
+  // Auto-advance only when playing AND user is not dragging
+  useEffect(() => {
+    if (!playing || scrubberActive || points.length < 2) return
+    const max = points.length - 1
+    const id = setInterval(() => {
+      setScrubberIndex(i => (i >= max ? 0 : i + 1))
+    }, 250)
+    return () => clearInterval(id)
+  }, [playing, scrubberActive, points.length])
 
   if (points.length < 2) return null
 
   const max = points.length - 1
-  const current = points[scrubberIndex] ?? points[0]
+  const safeIndex = Math.min(scrubberIndex, max)
+  const current = points[safeIndex]
 
-  // Format the epoch string nicely
-  const epochStr = current.epoch
+  const epochStr = current?.epoch
     ? new Date(current.epoch).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
     : ''
-
-  // Auto-advance when not being dragged (one step every 250ms)
-  useEffect(() => {
-    if (scrubberActive) return
-    const id = setInterval(() => {
-      setScrubberIndex((scrubberIndex + 1) % (max + 1))
-    }, 250)
-    return () => clearInterval(id)
-  }, [scrubberActive, scrubberIndex, max])
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setScrubberIndex(parseInt(e.target.value))
@@ -57,10 +67,10 @@ export function OrbitScrubber() {
       alignItems: 'center',
       gap: '12px',
     }}>
-      {/* Play/Pause button */}
+      {/* Play / Pause */}
       <button
-        onClick={() => setScrubberActive(!scrubberActive)}
-        title={scrubberActive ? 'Resume playback' : 'Pause playback'}
+        onClick={() => setPlaying(p => !p)}
+        title={playing ? 'Pause playback' : 'Play orbit animation'}
         style={{
           background: 'var(--surface2)',
           border: '1px solid var(--border)',
@@ -72,7 +82,7 @@ export function OrbitScrubber() {
           flexShrink: 0,
         }}
       >
-        {scrubberActive ? '▶' : '⏸'}
+        {playing ? '⏸' : '▶'}
       </button>
 
       {/* Label */}
@@ -85,31 +95,31 @@ export function OrbitScrubber() {
         type="range"
         min={0}
         max={max}
-        value={scrubberIndex}
+        value={safeIndex}
         onChange={handleChange}
-        onMouseDown={() => setScrubberActive(true)}
+        onMouseDown={() => { setScrubberActive(true); setPlaying(false) }}
         onMouseUp={() => setScrubberActive(false)}
-        onTouchStart={() => setScrubberActive(true)}
+        onTouchStart={() => { setScrubberActive(true); setPlaying(false) }}
         onTouchEnd={() => setScrubberActive(false)}
         style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer' }}
       />
 
-      {/* Current time + altitude */}
+      {/* Epoch + altitude + progress */}
       <div style={{ display: 'flex', gap: '12px', flexShrink: 0, fontSize: '11px' }}>
         <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>
           {epochStr}
         </span>
         <span style={{ color: 'var(--muted)' }}>
-          ALT <b style={{ color: 'var(--text)' }}>{current.altitude_km.toFixed(0)} km</b>
+          ALT <b style={{ color: 'var(--text)' }}>{current?.altitude_km.toFixed(0)} km</b>
         </span>
         <span style={{ color: 'var(--muted)' }}>
-          {Math.round(scrubberIndex / max * 100)}%
+          {max > 0 ? Math.round(safeIndex / max * 100) : 0}%
         </span>
       </div>
 
       {/* Reset */}
       <button
-        onClick={() => { setScrubberIndex(0); setScrubberActive(false) }}
+        onClick={() => { setScrubberIndex(0); setScrubberActive(false); setPlaying(false) }}
         title="Reset to start"
         style={{
           background: 'none',

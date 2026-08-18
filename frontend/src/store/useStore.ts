@@ -97,7 +97,7 @@ interface AppState {
   // ── Orbit playback scrubber ───────────────────────────────────
   scrubberIndex:     number        // index into orbit_points of active member
   scrubberActive:    boolean       // true while user is dragging
-  setScrubberIndex:  (i: number) => void
+  setScrubberIndex:  (i: number | ((prev: number) => number)) => void
   setScrubberActive: (v: boolean) => void
 }
 
@@ -291,7 +291,9 @@ export const useStore = create<AppState>()(
   // ── Orbit playback scrubber ──────────────────────────────────
   scrubberIndex:     0,
   scrubberActive:    false,
-  setScrubberIndex:  (i) => set({ scrubberIndex: i }),
+  setScrubberIndex:  (i) => set(s => ({
+    scrubberIndex: typeof i === 'function' ? i(s.scrubberIndex) : i,
+  })),
   setScrubberActive: (v) => set({ scrubberActive: v }),
     }),
     {
