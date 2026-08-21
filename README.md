@@ -20,19 +20,22 @@ Existing tools for this (Conjunction Data Messages, SOCRATES, commercial SSA pla
 Orbital Guardian takes a fleet of spacecraft, propagates every orbit, screens for close approaches against a debris catalog, scores and explains the risk with both deterministic and AI-driven analysis, and gives an operator a real workflow to review and act on it — approve or reject a simulated avoidance manoeuvre, with the decision logged.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 🛡️  ORBITAL GUARDIAN          Space Debris Conjunction Platform │
-├─────────────────────────────────────────────────────────────────┤
-│ 🟢 LIVE  🛰 ISS (ZARYA)  ALT: 409.1km  SPD: 7.68km/s  UTC …      │
-├───────────┬───────────────────┬──────────────────┬──────────────┤
-│ 🛰 Fleet  │  🌍 3D Earth Globe │ Fleet-wide scan  │ ⚠ Conjunction │
-│ manager   │  • Multi-spacecraft│ + CSV export     │  Alerts       │
-│ (add/     │    tracking, each  │ + Fleet Status   │  • Risk badge │
-│ remove,   │    colour-coded    │   per-spacecraft │  • Countdown  │
-│ per-ship  │  • Orbit tracks    │                  │  • AI insight │
-│ telemetry)│  • Debris markers  │                  │  • Approve/   │
-│           │  • Density heatmap │                  │    Reject     │
-└───────────┴───────────────────┴──────────────────┴──────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 🛡️  ORBITAL GUARDIAN               Space Debris Conjunction Platform    │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 🟢 LIVE  🛰 ISS (ZARYA)  ALT: 409.1km  SPD: 7.68km/s  UTC …            │
+├─────────────┬───────────────────────┬──────────────────┬────────────────┤
+│ 🛰 Fleet    │  🌍 3D Earth Globe     │ Fleet-wide scan  │ ⚠ Conjunction  │
+│ manager     │  • Multi-spacecraft   │ + CSV export     │  Alerts        │
+│ (add/remove,│    tracking, each     │ + Fleet Status   │  • Risk badge  │
+│ per-ship    │    colour-coded       │   per-spacecraft │  • Countdown   │
+│ telemetry)  │  • Orbit tracks       │                  │  • AI insight  │
+│             │  • Debris markers     │ 📋 Mission Log   │  • Approve/    │
+│             │  • Density heatmap    │  Operator audit  │    Reject      │
+│             │  • TCA overlay        │  trail (CSV)     │                │
+│             │  • Orbit scrubber     │ 🛰 Pass Predictor│                │
+│             │                       │  Contact windows │                │
+└─────────────┴───────────────────────┴──────────────────┴────────────────┘
 ```
 
 Every panel width-collapses so the globe can take the full screen; a mission-control header pulses and beeps when any active event reaches CRITICAL severity.
@@ -55,7 +58,7 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 │  Backend  (Python / FastAPI)                                     │
 │                                                                  │
 │  propagation.py ──► SGP4 orbit propagator (ECI state vectors)   │
-│  conjunction.py  ──► Conjunction analysis (golden-section TCA)   │
+│  conjunction.py ──► Conjunction analysis (golden-section TCA)   │
 │  risk_model.py  ──► Rule-based risk scoring (0–100, 5 tiers)    │
 │  ai_insight.py  ──► LLM briefing + IsolationForest anomaly ML   │
 │  space_track.py ──► Space-Track.org authenticated client        │
@@ -66,7 +69,7 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 └──────────────────────────┬───────────────────────────────────────┘
                            │  REST /api/*  +  WS /ws/live
 ┌──────────────────────────▼───────────────────────────────────────┐
-│  Frontend  (React 18 + TypeScript + Vite + Zustand)               │
+│  Frontend  (React 18 + TypeScript + Vite + Zustand)              │
 │                                                                  │
 │  Globe.tsx           ──► Three.js 3D Earth, multi-spacecraft     │
 │  FleetManager.tsx    ──► Add/remove spacecraft from fleet        │
@@ -75,6 +78,11 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 │  LiveStatus.tsx      ──► WebSocket live telemetry bar            │
 │  HeatmapPanel.tsx    ──► Orbital shell density chart             │
 │  ControlPanel.tsx    ──► TLE input + catalog source selector     │
+│  TCAOverlay.tsx      ──► Live TCA countdown on globe             │
+│  OrbitScrubber.tsx   ──► Orbit playback timeline scrubber        │
+│  MissionLog.tsx      ──► Operator decision audit trail           │
+│  PassPredictor.tsx   ──► Ground-station contact-window predictor │
+│  RiskBadge.tsx       ──► Reusable risk-level badge               │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,6 +109,8 @@ Tiers:  ≥80 CRITICAL | ≥60 HIGH | ≥35 MODERATE | ≥10 LOW | <10 NEGLIGIBL
 IBM Bob was the primary development tool for the initial build: scaffolding the full project (FastAPI backend, React/TypeScript frontend, Docker setup), implementing the core orbital mechanics pipeline (`propagation.py`, `conjunction.py`, `risk_model.py`), and building the AI insight layer (`ai_insight.py`).
 
 When Bob's session token budget was reached partway through, development continued manually to: wire up the multi-spacecraft fleet feature end-to-end (fleet management UI, globe rendering, operator approval workflow), diagnose and fix a data-integrity bug in the conjunction screening logic (a self-match edge case producing false 0 km conjunctions), add a synthetic demo-debris generator for reliable offline demos, and complete the dependency and testing hygiene needed for a reproducible submission (full `requirements.txt`, 87 passing backend tests, and git version control throughout).
+
+Bob was then used again in a second session to generate the full project summary, review all source files, and update this README.
 
 ## Quick Start
 
@@ -173,21 +183,22 @@ Then open `http://localhost:3000`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Liveness probe |
-| `GET` | `/tle/fetch` | Fetch TLE catalog from CelesTrak |
+| `GET`  | `/health` | Liveness probe |
+| `GET`  | `/tle/fetch` | Fetch TLE catalog from CelesTrak |
 | `POST` | `/orbits/track` | Propagate TLE → lat/lon/alt ground track |
 | `POST` | `/conjunctions` | Run conjunction analysis |
 | `POST` | `/risk` | Score raw conjunction metrics |
-| `GET` | `/conjunctions/scored` | Full pipeline: fetch → detect → score |
-| `GET` | `/catalog/celestrak` | CelesTrak catalog (no auth) |
-| `GET` | `/catalog/spacetrack` | Space-Track catalog (requires account) |
-| `GET` | `/catalog/demo-debris` | Synthetic guaranteed-conjunction catalog for demos |
-| `GET` | `/catalog/heatmap` | Debris density by orbital band |
-| `GET` | `/catalog/status` | Data source availability |
+| `GET`  | `/conjunctions/scored` | Full pipeline: fetch → detect → score |
+| `GET`  | `/catalog/celestrak` | CelesTrak catalog (no auth) |
+| `GET`  | `/catalog/spacetrack` | Space-Track catalog (requires account) |
+| `GET`  | `/catalog/demo-debris` | Synthetic guaranteed-conjunction catalog for demos |
+| `GET`  | `/catalog/heatmap` | Debris density by orbital band |
+| `GET`  | `/catalog/status` | Data source availability |
 | `POST` | `/ai/insight` | AI analysis for one event |
 | `POST` | `/ai/early-warning` | Full scan + anomaly detection |
-| `GET` | `/ai/status` | AI feature status |
-| `WS` | `/ws/live` | Live orbit position stream |
+| `GET`  | `/ai/status` | AI feature status |
+| `POST` | `/passes/predict` | Ground-station contact-window prediction (AOS, LOS, max elevation) |
+| `WS`   | `/ws/live` | Live orbit position stream |
 
 Full interactive docs: `http://127.0.0.1:8000/docs`
 
@@ -204,32 +215,45 @@ pytest -v
 ```
 orbital-guardian/
 ├── backend/
-│   ├── propagation.py    # SGP4 orbital propagator
-│   ├── conjunction.py    # Conjunction detection engine
-│   ├── risk_model.py     # Risk scoring (rule-based)
-│   ├── ai_insight.py     # LLM briefing + IsolationForest anomaly detection
-│   ├── space_track.py    # Space-Track.org client
-│   ├── api.py            # FastAPI application
+│   ├── propagation.py    # SGP4 orbital propagator (TLE → ECI state vectors)
+│   ├── conjunction.py    # Conjunction detection (coarse screen + golden-section TCA)
+│   ├── risk_model.py     # Risk scoring — rule-based, 0–100, 5 tiers
+│   ├── ai_insight.py     # GPT-4o-mini briefing + IsolationForest anomaly detection
+│   ├── space_track.py    # Space-Track.org authenticated async client
+│   ├── api.py            # FastAPI REST + WebSocket application
 │   ├── requirements.txt
 │   ├── .env.example
 │   ├── Dockerfile
-│   ├── data/              # TLE cache
-│   └── tests/              # 87 pytest unit tests
+│   ├── data/             # On-disk TLE cache (auto-populated)
+│   └── tests/            # 87 pytest unit tests
+│       ├── test_propagation.py
+│       ├── test_conjunction.py
+│       └── test_risk_model.py
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Globe.tsx           # 3D orbital globe, multi-spacecraft
-│   │   │   ├── FleetManager.tsx    # Add/remove fleet spacecraft
-│   │   │   ├── FleetPanel.tsx      # Fleet-wide scan + CSV export
-│   │   │   ├── AlertDashboard.tsx  # Conjunction alerts + approval workflow
-│   │   │   ├── LiveStatus.tsx      # Live telemetry bar
-│   │   │   ├── HeatmapPanel.tsx    # Debris density heatmap
-│   │   │   ├── ControlPanel.tsx    # TLE + catalog controls
-│   │   │   └── RiskBadge.tsx       # Risk level badge
-│   │   ├── api/client.ts           # Typed API client
-│   │   ├── store/useStore.ts       # Zustand state (fleet, approvals, catalog)
-│   │   └── types/index.ts          # Shared TypeScript types
-│   ├── public/textures/            # Earth textures
+│   │   │   ├── Globe.tsx           # Three.js 3D Earth, multi-spacecraft fleet
+│   │   │   ├── FleetManager.tsx    # Add/remove fleet spacecraft, preset picker
+│   │   │   ├── FleetPanel.tsx      # Fleet-wide scan + per-ship status + CSV export
+│   │   │   ├── AlertDashboard.tsx  # Conjunction alerts, AI insight, Approve/Reject
+│   │   │   ├── LiveStatus.tsx      # WebSocket live telemetry bar
+│   │   │   ├── HeatmapPanel.tsx    # Orbital shell debris density chart
+│   │   │   ├── ControlPanel.tsx    # TLE input + catalog source selector
+│   │   │   ├── TCAOverlay.tsx      # Live TCA countdown overlay on globe
+│   │   │   ├── OrbitScrubber.tsx   # Orbit playback timeline scrubber
+│   │   │   ├── MissionLog.tsx      # Operator decision audit trail + CSV export
+│   │   │   ├── PassPredictor.tsx   # Ground-station contact-window predictor
+│   │   │   └── RiskBadge.tsx       # Reusable risk-level badge component
+│   │   ├── api/
+│   │   │   └── client.ts           # Typed REST + WebSocket API client
+│   │   ├── store/
+│   │   │   └── useStore.ts         # Zustand state (fleet, approvals, mission log)
+│   │   └── types/
+│   │       └── index.ts            # Shared TypeScript types + spacecraft presets
+│   ├── public/
+│   │   └── textures/               # NASA Blue Marble Earth textures
+│   ├── index.html
+│   ├── vite.config.ts              # Dev proxy: /api → :8000, /ws → ws://:8000
 │   ├── package.json
 │   └── Dockerfile
 ├── docker-compose.yml
@@ -243,6 +267,37 @@ orbital-guardian/
 | [CelesTrak](https://celestrak.org) | TLE catalogs (active, stations, Starlink) | None — User-Agent required |
 | [Space-Track.org](https://www.space-track.org) | Full SSN catalog (25,000+ objects) | Free account |
 | Synthetic demo debris | Generated per-spacecraft near-miss objects for reliable offline demos | None |
+
+## Spacecraft Presets
+
+The following real spacecraft are available as one-click presets in the Fleet Manager:
+
+| Spacecraft | Category | Orbit |
+|------------|----------|-------|
+| ISS (ZARYA) | Crewed | ~409 km, 51.6° |
+| CSS (TIANHE) | Crewed | ~390 km, 41.5° |
+| HST (HUBBLE) | Science | ~537 km, 28.5° |
+| SENTINEL-1A | Earth Observation | ~693 km, SSO |
+| TERRA | Earth Observation | ~705 km, SSO |
+| NOAA 15 | Weather | ~807 km, SSO |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend language** | Python 3.12 |
+| **Web framework** | FastAPI + Uvicorn (ASGI, WebSocket) |
+| **Orbital mechanics** | sgp4 ≥ 2.22 |
+| **Numerics** | NumPy |
+| **ML / anomaly detection** | scikit-learn (IsolationForest) |
+| **LLM** | OpenAI GPT-4o-mini |
+| **HTTP client** | httpx (async) |
+| **Frontend framework** | React 18 + TypeScript 5 |
+| **Build tool** | Vite 5 |
+| **3D rendering** | Three.js + @react-three/fiber + drei |
+| **State management** | Zustand 4 (with localStorage persistence) |
+| **Containerisation** | Docker + Docker Compose |
+| **Production serving** | nginx:alpine |
 
 ## Team
 

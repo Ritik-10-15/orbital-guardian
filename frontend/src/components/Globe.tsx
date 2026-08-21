@@ -94,8 +94,28 @@ function Earth() {
   )
 }
 
-// ── Orbit track line ─────────────────────────────────────────
-  function OrbitTracks() {
+// ── Single orbit track — memoized so geometry is never re-created per frame ──
+function OrbitTrack({ points, colour, id }: {
+  points: THREE.Vector3[]
+  colour: string
+  id: string
+}) {
+  // useMemo ensures the BufferGeometry is only rebuilt when points actually change
+  const geometry = useMemo(() => {
+    const g = new THREE.BufferGeometry().setFromPoints(points)
+    return g
+  }, [points])
+
+  return (
+    <line key={id}>
+      <primitive object={geometry} attach="geometry" />
+      <lineBasicMaterial color={colour} opacity={0.75} transparent />
+    </line>
+  )
+}
+
+// ── Orbit tracks — one per active fleet member ────────────────
+function OrbitTracks() {
   const { fleet } = useStore()
 
   return (
@@ -104,12 +124,13 @@ function Earth() {
         const pts = member.orbit_points.map(p =>
           latLonAltToVec3(p.latitude_deg, p.longitude_deg, p.altitude_km)
         )
-        const geometry = new THREE.BufferGeometry().setFromPoints(pts)
         return (
-          <line key={member.id}>
-            <primitive object={geometry} attach="geometry" />
-            <lineBasicMaterial color={member.colour} opacity={0.75} transparent />
-          </line>
+          <OrbitTrack
+            key={member.id}
+            id={member.id}
+            points={pts}
+            colour={member.colour}
+          />
         )
       })}
     </>
