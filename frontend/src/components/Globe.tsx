@@ -7,7 +7,7 @@
 //   ✦ Debris markers placed at real conjunction geometry
 // ============================================================
 
-import React, { useRef, useMemo, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import * as THREE from 'three'
@@ -94,47 +94,53 @@ function Earth() {
   )
 }
 
-// ── Single orbit track — memoized so geometry is never re-created per frame ──
-function OrbitTrack({ points, colour, id }: {
-  points: THREE.Vector3[]
-  colour: string
-  id: string
-}) {
-  // useMemo ensures the BufferGeometry is only rebuilt when points actually change
-  const geometry = useMemo(() => {
-    const g = new THREE.BufferGeometry().setFromPoints(points)
-    return g
-  }, [points])
-
-  return (
-    <line key={id}>
-      <primitive object={geometry} attach="geometry" />
-      <lineBasicMaterial color={colour} opacity={0.75} transparent />
-    </line>
-  )
-}
-
-// ── Orbit tracks — one per active fleet member ────────────────
+// ── Orbit tracks — injected directly into the Three.js scene via useEffect ──
+// Bypasses R3F's reconciler entirely to avoid the <line> JSX / primitive issues
 function OrbitTracks() {
   const { fleet } = useStore()
+  const { scene } = useThree()
+  const linesRef = useRef<THREE.Line[]>([])
 
-  return (
-    <>
-      {fleet.filter(m => m.active && m.orbit_points.length > 1).map(member => {
+  useEffect(() => {
+    // Remove all previously added track lines from the scene
+    linesRef.current.forEach(l => {
+      scene.remove(l)
+      l.geometry.dispose()
+      ;(l.material as THREE.Material).dispose()
+    })
+    linesRef.current = []
+
+    // Add one line per active fleet member that has orbit points
+    fleet
+      .filter(m => m.active && m.orbit_points.length > 1)
+      .forEach(member => {
         const pts = member.orbit_points.map(p =>
           latLonAltToVec3(p.latitude_deg, p.longitude_deg, p.altitude_km)
         )
-        return (
-          <OrbitTrack
-            key={member.id}
-            id={member.id}
-            points={pts}
-            colour={member.colour}
-          />
-        )
-      })}
-    </>
-  )
+        if (pts.length < 2) return
+        const geometry = new THREE.BufferGeometry().setFromPoints(pts)
+        const material = new THREE.LineBasicMaterial({
+          color: new THREE.Color(member.colour),
+          opacity: 0.75,
+          transparent: true,
+        })
+        const line = new THREE.Line(geometry, material)
+        scene.add(line)
+        linesRef.current.push(line)
+      })
+
+    // Cleanup on unmount
+    return () => {
+      linesRef.current.forEach(l => {
+        scene.remove(l)
+        l.geometry.dispose()
+        ;(l.material as THREE.Material).dispose()
+      })
+      linesRef.current = []
+    }
+  }, [fleet, scene])
+
+  return null
 }
 // ── Animated spacecraft dot ───────────────────────────────────
 // ── Spacecraft dots — one per active fleet member, falls back to first orbit point if no live_frame ─
@@ -337,13 +343,26 @@ function Clouds() {
   )
 }
 
+// ── Scene background setter — runs once inside the Canvas context ─────
+function SceneBackground() {
+  const { scene } = useThree()
+  useEffect(() => {
+    scene.background = new THREE.Color('#020817')
+  }, [scene])
+  return null
+}
+
 // ── Main Globe component ─────────────────────────────────────
-export function Globe() {
+export const Globe = React.memo(function Globe() {
   return (
     <div style={{ width: '100%', height: '100%', background: '#020817' }}>
       <Canvas
         camera={{ position: [0, 0, 3], fov: 45 }}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, alpha: false }}
+        style={{ background: '#020817' }}
+        onCreated={({ gl }) => {
+          gl.setClearColor('#020817', 1)
+        }}
       >
         {/* Lighting — sun from upper-right */}
         <ambientLight intensity={0.6} />
@@ -356,6 +375,9 @@ export function Globe() {
 
         {/* Background stars */}
         <Stars radius={100} depth={50} count={4000} factor={4} fade />
+
+        {/* Force scene background colour — persists through re-renders */}
+        <SceneBackground />
 
         {/* Scene objects — order matters for transparency */}
         <Earth />
@@ -379,4 +401,4 @@ export function Globe() {
       </Canvas>
     </div>
   )
-}
+})

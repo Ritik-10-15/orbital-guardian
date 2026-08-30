@@ -37,6 +37,11 @@ export function OrbitScrubber() {
     return () => clearInterval(id)
   }, [playing, scrubberActive, points.length])
 
+  // useCallback must be declared before any early return to satisfy Rules of Hooks
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setScrubberIndex(parseInt(e.target.value))
+  }, [setScrubberIndex])
+
   if (points.length < 2) return null
 
   const max = points.length - 1
@@ -46,10 +51,6 @@ export function OrbitScrubber() {
   const epochStr = current?.epoch
     ? new Date(current.epoch).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
     : ''
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setScrubberIndex(parseInt(e.target.value))
-  }, [setScrubberIndex])
 
   return (
     <div style={{
