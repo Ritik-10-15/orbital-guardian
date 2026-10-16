@@ -153,7 +153,7 @@ Bob was then used again in a second session to generate the full project summary
 ### 1 — Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/orbital-guardian
+git clone https://github.com/Ritik-10-15/orbital-guardian.git
 cd orbital-guardian
 ```
 
@@ -337,7 +337,7 @@ Solo submission — **RITIK GUPTA**
 
 ## Links
 
-- GitHub repository: https://github.com/ritikgupta/orbital-guardian
+- GitHub repository: https://github.com/Ritik-10-15/orbital-guardian
 - Demo video (≤3 min): *(add your video link before submission)*
 
 ## License
