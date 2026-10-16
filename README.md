@@ -86,6 +86,38 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+## Proposed AWS Architecture (Design Only)
+
+This is a documented target architecture for Orbital Guardian. It is not deployed, and this repository does not create AWS resources. The design keeps the React frontend, FastAPI/WebSocket backend, and PostgreSQL persistence in separate AWS services:
+
+```mermaid
+flowchart TD
+    U[Browser over HTTPS / WSS] --> CF[Amazon CloudFront]
+    CF -->|Default route: static app| S3[Private Amazon S3 bucket<br/>Vite build, protected by OAC]
+    CF -->|/api/* and /ws/*| EC2[Amazon EC2<br/>nginx + Docker Compose]
+    EC2 --> API[FastAPI container<br/>REST + WebSocket]
+    API -->|PostgreSQL over private network| RDS[(Amazon RDS for PostgreSQL<br/>private subnets)]
+    WAF[AWS WAF IP allowlist] -. protects viewer access .-> CF
+    IAM[IAM instance profile + Systems Manager] -. manages and limits access .-> EC2
+    SM[AWS Secrets Manager] -. database credential .-> API
+    CW[Amazon CloudWatch] -. logs, health metrics, alarms .-> EC2
+```
+
+| AWS service | Role in the design |
+|---|---|
+| **Amazon CloudFront** | HTTPS entry point; serves the single-page app and routes `/api/*` and `/ws/*` to the backend origin. |
+| **Amazon S3 + CloudFront OAC** | Stores the built React app in a private bucket; users cannot access the bucket directly. |
+| **Amazon EC2 + Docker Compose** | Runs nginx and the existing FastAPI backend container, including the live WebSocket endpoint. |
+| **Amazon RDS for PostgreSQL** | Stores fleet configuration, approvals, and mission history in private database subnets. |
+| **Amazon VPC + security groups** | Limits database access to the backend and restricts inbound access to the web origin. |
+| **IAM + Systems Manager** | Uses an instance role for scoped AWS permissions and browser-based server administration without SSH keys. |
+| **AWS Secrets Manager** | Holds database credentials outside the source code and container image. |
+| **AWS WAF + CloudWatch** | Restricts access for a no-auth demo and provides logs, health metrics, and alarms. |
+
+For a portfolio demo, the design assumes synthetic data and an IP allowlist because the app does not yet have user authentication. The separate [AWS deployment runbook](DEPLOYMENT.md) records implementation considerations and the current deployment plan. No AWS resources have been provisioned.
+
+**Resume wording:** “Designed a proposed AWS architecture for a FastAPI and React application using CloudFront, private S3 with Origin Access Control, EC2, RDS PostgreSQL, IAM, Secrets Manager, Systems Manager, and WAF.”
+
 ## AI Approach
 
 Three distinct layers of intelligence sit on top of the physics pipeline, each doing genuinely different analytical work:
