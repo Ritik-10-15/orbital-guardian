@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
+import { api } from '../api/client'
 import type { MissionLogEntry } from '../types'
 import { RISK_COLOURS } from '../types'
 
@@ -49,7 +50,8 @@ function exportLogCSV(log: MissionLogEntry[]) {
 function LogRow({ entry }: { entry: MissionLogEntry }) {
   const [expanded, setExpanded] = useState(false)
   const isApproved = entry.decision === 'APPROVED'
-  const decisionColour = isApproved ? '#22c55e' : '#ef4444'
+  const isCleared = entry.decision === 'CLEARED'
+  const decisionColour = isApproved ? '#22c55e' : isCleared ? '#94a3b8' : '#ef4444'
   const riskColour = RISK_COLOURS[entry.risk_level]
 
   return (
@@ -78,7 +80,7 @@ function LogRow({ entry }: { entry: MissionLogEntry }) {
           fontSize: '10px',
           flexShrink: 0,
         }}>
-          {isApproved ? '✓' : '✕'}
+          {isApproved ? '✓' : isCleared ? '↺' : '✕'}
         </span>
 
         {/* Spacecraft */}
@@ -143,14 +145,26 @@ function LogRow({ entry }: { entry: MissionLogEntry }) {
 }
 
 export function MissionLog() {
-  const { missionLog, clearLog } = useStore()
+  const { missionLog, missionLogTotal, missionLogHasMore, missionLogLoadingMore, loadMoreMissionLog } = useStore()
   const [collapsed, setCollapsed] = useState(true)   // starts collapsed
-  const [filter, setFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED'>('ALL')
+  const [filter, setFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'CLEARED'>('ALL')
+  const [exporting, setExporting] = useState(false)
 
   const filtered = filter === 'ALL' ? missionLog : missionLog.filter(e => e.decision === filter)
 
   const approvedCount = missionLog.filter(e => e.decision === 'APPROVED').length
   const rejectedCount = missionLog.filter(e => e.decision === 'REJECTED').length
+
+  async function exportFullLog() {
+    setExporting(true)
+    try {
+      exportLogCSV(await api.allMissionLog())
+    } catch (error) {
+      window.alert(`Could not export the full mission log: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (collapsed) {
     return (
@@ -171,12 +185,12 @@ export function MissionLog() {
           }}
         >◀</button>
         <span style={{ fontSize: '16px' }}>📋</span>
-        {missionLog.length > 0 && (
+        {missionLogTotal > 0 && (
           <span style={{
             background: '#1d4ed8', color: '#fff', borderRadius: '999px',
             width: 18, height: 18, display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontSize: '10px', fontWeight: 700,
-          }}>{missionLog.length}</span>
+          }}>{missionLogTotal}</span>
         )}
       </div>
     )
@@ -201,25 +215,15 @@ export function MissionLog() {
         <span style={{ fontSize: '10px', color: '#22c55e' }}>{approvedCount} ✓</span>
         <span style={{ fontSize: '10px', color: '#ef4444' }}>{rejectedCount} ✕</span>
         <button
-          onClick={() => exportLogCSV(missionLog)}
-          disabled={missionLog.length === 0}
-          title="Export log as CSV"
+          onClick={() => { void exportFullLog() }}
+          disabled={missionLogTotal === 0 || exporting}
+          title="Export the full audit log as CSV"
           style={{
             padding: '3px 8px', background: 'var(--surface2)',
             border: '1px solid var(--border)', borderRadius: '4px',
-            color: 'var(--muted)', fontSize: '10px', cursor: missionLog.length === 0 ? 'not-allowed' : 'pointer',
+            color: 'var(--muted)', fontSize: '10px', cursor: missionLogTotal === 0 || exporting ? 'not-allowed' : 'pointer',
           }}
         >📄 CSV</button>
-        <button
-          onClick={() => { if (confirm('Clear mission log?')) clearLog() }}
-          disabled={missionLog.length === 0}
-          title="Clear log"
-          style={{
-            padding: '3px 6px', background: 'none',
-            border: '1px solid var(--border)', borderRadius: '4px',
-            color: '#ef4444', fontSize: '10px', cursor: missionLog.length === 0 ? 'not-allowed' : 'pointer',
-          }}
-        >✕</button>
         <button
           onClick={() => setCollapsed(true)}
           style={{
@@ -235,7 +239,7 @@ export function MissionLog() {
         display: 'flex', borderBottom: '1px solid var(--border)',
         flexShrink: 0,
       }}>
-        {(['ALL', 'APPROVED', 'REJECTED'] as const).map(f => (
+        {(['ALL', 'APPROVED', 'REJECTED', 'CLEARED'] as const).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -261,6 +265,17 @@ export function MissionLog() {
           </div>
         ) : (
           filtered.map(entry => <LogRow key={entry.id} entry={entry} />)
+        )}
+        {missionLogHasMore && (
+          <button
+            onClick={() => { void loadMoreMissionLog() }}
+            disabled={missionLogLoadingMore}
+            style={{
+              width: '100%', padding: '10px', background: 'var(--surface2)',
+              border: 'none', borderTop: '1px solid var(--border)',
+              color: 'var(--muted)', fontSize: '11px', cursor: 'pointer',
+            }}
+          >{missionLogLoadingMore ? 'Loading…' : 'Load older entries'}</button>
         )}
       </div>
     </div>

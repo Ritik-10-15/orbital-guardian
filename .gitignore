@@ -10,6 +10,7 @@ venv/
 # Environment secrets
 .env
 !.env.example
+.env.aws
 
 # Node / frontend
 node_modules/

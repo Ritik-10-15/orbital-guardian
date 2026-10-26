@@ -29,8 +29,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from propagation import TLE, Propagator, StateVector, eci_to_ecef  # type: ignore[import]
@@ -38,6 +39,7 @@ from conjunction import find_conjunctions, ConjunctionEvent      # type: ignore[
 from risk_model import score_risk, score_events, RiskAssessment # type: ignore[import]
 from space_track import SpaceTrackClient, spacetrack_configured # type: ignore[import]
 from ai_insight import generate_insight, batch_generate_insights, AIAnalysis # type: ignore[import]
+from persistence import router as persistence_router, seed_initial_fleet  # type: ignore[import]
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -49,12 +51,52 @@ app = FastAPI(
     description="Space debris conjunction detection and risk assessment.",
 )
 
+STATIC_DIR = Path(__file__).parent / "static"
+PUBLIC_READ_ONLY = os.getenv("PUBLIC_READ_ONLY", "false").lower() in {"1", "true", "yes"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],        # tighten in production
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(persistence_router)
+
+
+@app.middleware("http")
+async def strip_hosted_api_prefix(request: Request, call_next):
+    # Local nginx/Vite already strips /api. The combined cloud image serves the
+    # frontend directly, so reproduce that proxy behavior only in that image.
+    path = request.scope["path"]
+    if STATIC_DIR.is_dir() and (path == "/api" or path.startswith("/api/")):
+        request.scope["path"] = path[4:] or "/"
+        raw_path = request.scope.get("raw_path")
+        if raw_path is not None:
+            request.scope["raw_path"] = raw_path[4:] or b"/"
+
+    if PUBLIC_READ_ONLY:
+        path = request.scope["path"]
+        method = request.method.upper()
+        persistent_write = (
+            (path == "/fleet" and method == "POST")
+            or (path.startswith("/fleet/") and method in {"PATCH", "DELETE"})
+            or (path == "/approvals" and method == "PUT")
+            or (path == "/approvals/clear" and method == "POST")
+            or (path == "/state/import-local" and method == "POST")
+        )
+        if persistent_write:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "This public demo is read-only."},
+            )
+    return await call_next(request)
+
+
+@app.on_event("startup")
+def initialize_persistent_state() -> None:
+    # Database schema is applied by Alembic before the API container starts.
+    seed_initial_fleet()
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -64,7 +106,10 @@ CELESTRAK_TLE  = "https://celestrak.org/pub/TLE"
 
 # CelesTrak requires a User-Agent header — plain httpx gets 403 without it
 CELESTRAK_HEADERS = {
-    "User-Agent": "OrbitalGuardian/1.0 (educational project; contact: student@university.edu)"
+    "User-Agent": os.getenv(
+        "CELESTRAK_USER_AGENT",
+        "OrbitalGuardian/1.0 (educational project)",
+    )
 }
 
 # OpenAI — optional, for LLM-powered insights (Option C)
@@ -1086,3 +1131,16 @@ async def ws_live(websocket: WebSocket) -> None:
 
     except WebSocketDisconnect:
         pass  # client closed — exit cleanly
+
+
+# The cloud image includes the production Vite build. Local API development
+# keeps using the Vite dev server, so this mount is only enabled in that image.
+if STATIC_DIR.is_dir():
+    STATIC_ROOT = STATIC_DIR.resolve()
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def serve_frontend(path: str) -> FileResponse:
+        requested_file = (STATIC_ROOT / path).resolve()
+        if STATIC_ROOT in requested_file.parents and requested_file.is_file():
+            return FileResponse(requested_file)
+        return FileResponse(STATIC_ROOT / "index.html")

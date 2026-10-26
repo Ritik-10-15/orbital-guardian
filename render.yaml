@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: orbital-guardian
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /ready
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: orbital-guardian-db
+          property: connectionString
+      - key: ALLOW_LOCAL_STATE_IMPORT
+        value: "false"
+      - key: PUBLIC_READ_ONLY
+        value: "false"
+      - key: CELESTRAK_USER_AGENT
+        value: OrbitalGuardian/1.0 (educational project)
+
+databases:
+  - name: orbital-guardian-db
+    plan: free
+    region: oregon
+    databaseName: orbital_guardian
+    user: orbital_guardian
+    postgresMajorVersion: "16"

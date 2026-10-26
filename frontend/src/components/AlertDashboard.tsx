@@ -15,6 +15,7 @@ import { RiskBadge } from './RiskBadge'
 import { api } from '../api/client'
 import type { ConjunctionEvent, RiskResponse, ApprovalStatus } from '../types'
 import { RISK_COLOURS, eventKey } from '../types'
+import { PUBLIC_READ_ONLY } from '../config'
 // ── AI insight types ─────────────────────────────────────────
 interface AIInsight {
   insight:        string
@@ -106,14 +107,16 @@ function ScoreBar({ score, colour }: { score: number; colour: string }) {
 
 // ── Manoeuvre simulator ───────────────────────────────────────
 function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
-  const { approvals, approveEvent, rejectEvent, clearApproval } = useStore()
+  const { approvals, activeFleetId, approveEvent, rejectEvent, clearApproval } = useStore()
   const [missKm, setMissKm]       = useState(ev.miss_distance_km)
   const [result, setResult]       = useState<RiskResponse | null>(null)
   const [simLoading, setSimLoading] = useState(false)
   const [notes, setNotes] = useState('')
 
-  const key = eventKey(ev)
-  const approval = approvals[key]
+  const key = eventKey(ev, activeFleetId)
+  const legacyKey = eventKey(ev, 'legacy')
+  const approval = approvals[key] ?? approvals[legacyKey]
+  const approvalSpacecraftId = approval?.spacecraft_id ?? activeFleetId
 
   async function simulate(newMiss: number) {
     setMissKm(newMiss)
@@ -229,50 +232,58 @@ function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
         paddingTop: '12px',
         borderTop: '1px solid var(--border)',
       }}>
-        <textarea
-          placeholder="Optional notes (e.g. burn timing, fuel budget considerations)…"
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          style={{
-            width: '100%',
-            minHeight: '48px',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--text)',
-            padding: '6px 8px',
-            fontSize: '11px',
-            fontFamily: 'inherit',
-            resize: 'vertical',
-            marginBottom: '8px',
-            outline: 'none',
-          }}
-        />
+        {!PUBLIC_READ_ONLY && (
+          <textarea
+            placeholder="Optional notes (e.g. burn timing, fuel budget considerations)…"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            style={{
+              width: '100%',
+              minHeight: '48px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              color: 'var(--text)',
+              padding: '6px 8px',
+              fontSize: '11px',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+              marginBottom: '8px',
+              outline: 'none',
+            }}
+          />
+        )}
 
         {approval ? (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span style={{ fontSize: '10px', color: 'var(--muted)', flex: 1 }}>
               Decided {new Date(approval.decided_at!).toLocaleString()} at {approval.decided_miss_km.toFixed(1)} km
             </span>
-            <button
-              onClick={() => clearApproval(ev)}
-              style={{
-                padding: '5px 10px',
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                color: 'var(--muted)',
-                fontSize: '11px',
-                cursor: 'pointer',
-              }}
-            >
-              Revise
-            </button>
+            {!PUBLIC_READ_ONLY && (
+              <button
+                onClick={() => { void clearApproval(ev, approvalSpacecraftId) }}
+                style={{
+                  padding: '5px 10px',
+                  background: 'var(--surface2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  color: 'var(--muted)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Revise
+              </button>
+            )}
           </div>
+        ) : PUBLIC_READ_ONLY ? (
+          <span style={{ fontSize: '10px', color: 'var(--muted)' }}>
+            Decision controls are disabled in this public view.
+          </span>
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => approveEvent(ev, missKm, displayScore, notes)}
+              onClick={() => { void approveEvent(ev, activeFleetId, missKm, displayScore, notes) }}
               style={{
                 flex: 1,
                 padding: '8px',
@@ -288,7 +299,7 @@ function ManoeuvreSimulator({ ev }: { ev: ConjunctionEvent }) {
               ✓ Approve Manoeuvre
             </button>
             <button
-              onClick={() => rejectEvent(ev, missKm, displayScore, notes)}
+              onClick={() => { void rejectEvent(ev, activeFleetId, missKm, displayScore, notes) }}
               style={{
                 flex: 1,
                 padding: '8px',
