@@ -142,7 +142,9 @@ Resources:
             #!/bin/bash
             set -euxo pipefail
             dnf update -y
-            dnf install -y docker git curl openssl
+            # Amazon Linux 2023 ships curl-minimal, which already provides `curl`.
+            # Installing the separate curl package conflicts with curl-minimal.
+            dnf install -y docker git openssl
             systemctl enable --now docker
             systemctl enable --now amazon-ssm-agent
 
