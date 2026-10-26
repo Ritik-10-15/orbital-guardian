@@ -6,7 +6,8 @@ shared fleet and mission history on the instance's encrypted EBS volume. It
 does not create RDS, NAT Gateway, load balancer, CloudFront, WAF, or a static
 Elastic IP.
 
-The setup is prepared in this repository. **No AWS resources have been created.**
+The setup is prepared in this repository. Launching the CloudFormation template
+creates AWS resources in the selected region.
 
 ## Free Tier limits
 
@@ -63,11 +64,61 @@ environment file with owner-only permissions. PostgreSQL is not exposed to the
 internet. Fleet edits and mission decisions are interactive and shared by
 everyone who visits the URL. There is no login, so use demo data only.
 
-If the app does not come up, open the instance through **EC2 > Instances >
-Connect > Session Manager**, then inspect the bootstrap and container logs:
+If the app does not come up, first check the instance's **Status checks** and
+**Actions > Monitor and troubleshoot > Get system log**. If the initial
+bootstrap stopped before cloning the repository, use **Systems Manager > Run
+Command** with the `AWS-RunShellScript` document, target the instance ID from
+the stack's `InstanceId` output, and run the following commands. The script
+creates a fresh database password and starts the containers. Run Command
+executes this as root; do not paste a password into the command text.
 
 ```bash
-sudo tail -n 100 /var/log/cloud-init-output.log
+set -euo pipefail
+dnf install -y docker git openssl
+systemctl enable --now docker
+systemctl enable --now amazon-ssm-agent
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL --retry 5 https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+if [ ! -f /swapfile ]; then
+  fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+fi
+
+git clone --depth 1 --single-branch --branch 'aws-free-tier-deploy' 'https://github.com/Ritik-10-15/orbital-guardian.git' /opt/orbital-guardian
+chown -R ec2-user:ec2-user /opt/orbital-guardian
+cd /opt/orbital-guardian
+DB_PASSWORD="$(openssl rand -hex 24)"
+cat > .env.aws <<EOF
+DB_PASSWORD=$DB_PASSWORD
+POSTGRES_USER=orbital
+POSTGRES_DB=orbital_guardian
+PUBLIC_READ_ONLY=false
+VITE_PUBLIC_READ_ONLY=false
+ALLOW_LOCAL_STATE_IMPORT=false
+OPENAI_API_KEY=
+SPACETRACK_USER=
+SPACETRACK_PASS=
+CELESTRAK_USER_AGENT=OrbitalGuardian/1.0 (educational project)
+MAX_DEBRIS_OBJECTS=200
+EOF
+chown root:root .env.aws
+chmod 600 .env.aws
+
+docker compose --env-file .env.aws -f docker-compose.aws-free.yml build
+docker compose --env-file .env.aws -f docker-compose.aws-free.yml up -d
+```
+
+After the command succeeds, allow the build a few minutes and open the stack's
+`AppUrl` output. For container diagnostics once `/opt/orbital-guardian` exists,
+use Session Manager and run:
+
+```bash
 cd /opt/orbital-guardian
 sudo docker compose --env-file .env.aws -f docker-compose.aws-free.yml logs
 ```
