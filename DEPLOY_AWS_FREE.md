@@ -31,12 +31,14 @@ created before July 15, 2025 has already elapsed as of October 2026. See
 1. In **Billing and Cost Management**, confirm your account plan, remaining
    credits, and Free Tier status. Do not upgrade a Free account plan unless you
    accept that usage beyond credits can be billed.
-2. Push this deployment configuration and app changes to the public GitHub
-   branch you plan to deploy. The instance clones that branch during startup;
-   visitors only need the resulting app link, not GitHub.
-3. In the same AWS region you will deploy to, create or choose an EC2 key pair.
-   Find your current public IPv4 address; the template restricts SSH to that
-   address with `/32`.
+2. The deployment configuration and app changes are pushed to the public
+   `aws-free-tier-deploy` branch, which the template uses by default. The
+   instance clones that branch during startup; visitors only need the resulting
+   app link, not GitHub.
+3. Confirm your AWS role can create IAM roles and instance profiles. The stack
+   uses Systems Manager Session Manager for administration, so no SSH key or
+   inbound SSH port is needed. Session Manager has no additional charge for EC2
+   instances ([AWS pricing](https://aws.amazon.com/systems-manager/pricing/)).
 4. Confirm the region has the `t4g.small` instance type and that it is eligible
    for your account. Do not create an Elastic IP or other services alongside
    this stack.
@@ -45,13 +47,12 @@ created before July 15, 2025 has already elapsed as of October 2026. See
 
 1. Open **CloudFormation > Create stack > With new resources (standard)**.
 2. Upload [`aws/free-tier-ec2.yaml`](aws/free-tier-ec2.yaml).
-3. Enter a stack name and set `KeyPairName` and `AllowedSshCidr` to your key
-   pair and public IPv4 address with `/32`. Change the repository URL or branch
-   if you deploy a different public repo/branch.
+3. Enter a stack name. Change the repository URL or branch if you deploy a
+   different public repo or branch.
 4. Create the stack. The template creates one VPC, public subnet, security
    group, and one `t4g.small` EC2 instance with a 20 GiB encrypted `gp3` root
-   volume. The instance builds the containers on first boot; this can take
-   several minutes.
+   volume. The security group exposes only HTTP port 80. The instance builds
+   the containers on first boot; this can take several minutes.
 5. The stack can reach `CREATE_COMPLETE` before the first container build
    finishes. Allow several more minutes, then open the **AppUrl** output. It is
    an HTTP URL without TLS. The instance's public hostname may change if you
@@ -62,8 +63,8 @@ environment file with owner-only permissions. PostgreSQL is not exposed to the
 internet. Fleet edits and mission decisions are interactive and shared by
 everyone who visits the URL. There is no login, so use demo data only.
 
-If the app does not come up, SSH from the allowed IP and inspect the bootstrap
-and container logs:
+If the app does not come up, open the instance through **EC2 > Instances >
+Connect > Session Manager**, then inspect the bootstrap and container logs:
 
 ```bash
 sudo tail -n 100 /var/log/cloud-init-output.log
@@ -73,8 +74,8 @@ sudo docker compose --env-file .env.aws -f docker-compose.aws-free.yml logs
 
 ## Update and cleanup
 
-To update a running instance after pushing a new commit, SSH from the allowed
-IP and run:
+To update a running instance after pushing a new commit, open the instance
+through **EC2 > Instances > Connect > Session Manager** and run:
 
 ```bash
 cd /opt/orbital-guardian

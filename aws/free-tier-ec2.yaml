@@ -2,14 +2,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Single-instance Orbital Guardian demo for eligible AWS Free Tier accounts.
 
 Parameters:
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Existing EC2 key pair used for SSH administration.
-  AllowedSshCidr:
-    Type: String
-    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$
-    ConstraintDescription: Enter your public IPv4 address followed by /32.
-    Description: Restricts SSH to your own public IPv4 address, for example 203.0.113.10/32.
   GitHubRepoUrl:
     Type: String
     Default: https://github.com/Ritik-10-15/orbital-guardian.git
@@ -17,7 +9,7 @@ Parameters:
     Description: Public HTTPS GitHub repository containing the deployment files.
   GitHubBranch:
     Type: String
-    Default: main
+    Default: aws-free-tier-deploy
     AllowedPattern: ^[A-Za-z0-9._/-]+$
     Description: Branch that contains docker-compose.aws-free.yml and the application source.
   LatestArmAmi:
@@ -26,6 +18,25 @@ Parameters:
     Description: Latest Amazon Linux 2023 ARM64 AMI.
 
 Resources:
+  AppInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AppInstanceRole
+
   AppVpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -85,17 +96,13 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Public web access and SSH from the deployer's IP only.
+      GroupDescription: Public web access; server administration uses Session Manager.
       VpcId: !Ref AppVpc
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSshCidr
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -111,7 +118,7 @@ Resources:
     Properties:
       ImageId: !Ref LatestArmAmi
       InstanceType: t4g.small
-      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref AppInstanceProfile
       NetworkInterfaces:
         - DeviceIndex: "0"
           AssociatePublicIpAddress: true
@@ -137,6 +144,7 @@ Resources:
             dnf update -y
             dnf install -y docker git curl openssl
             systemctl enable --now docker
+            systemctl enable --now amazon-ssm-agent
 
             mkdir -p /usr/local/lib/docker/cli-plugins
             curl -fsSL --retry 5 https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
@@ -180,6 +188,6 @@ Outputs:
   InstanceId:
     Description: EC2 instance ID for administration and cleanup.
     Value: !Ref AppInstance
-  SshCommand:
-    Description: SSH command from the IPv4 address allowed by AllowedSshCidr.
-    Value: !Sub ec2-user@${AppInstance.PublicDnsName}
+  AdminAccess:
+    Description: Use Systems Manager Session Manager from the EC2 console.
+    Value: Open EC2 Instances, select this instance, choose Connect, then Session Manager.
