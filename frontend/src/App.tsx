@@ -1,12 +1,17 @@
 // ============================================================
 // src/App.tsx
-// Root layout: StatusBar → Globe + Dashboard → ControlPanel
-// Option E: Mission control header + CRITICAL blink + sound alert
+// Mission-control shell: Sidebar | TopBar + dashboard panel grid
+// Option E: CRITICAL blink + sound alert
 // ============================================================
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
-import { LiveStatus }      from './components/LiveStatus'
+import { useLiveFeed }     from './hooks/useLiveFeed'
+import { Sidebar }         from './components/Sidebar'
+import type { SectionId }  from './components/Sidebar'
+import { TopBar }          from './components/TopBar'
+import { SpacecraftHero }  from './components/SpacecraftHero'
+import { TelemetryPanel }  from './components/TelemetryPanel'
 import { Globe }           from './components/Globe'
 import { AlertDashboard }  from './components/AlertDashboard'
 import { ControlPanel }    from './components/ControlPanel'
@@ -17,7 +22,6 @@ import { TCAOverlay }      from './components/TCAOverlay'
 import { OrbitScrubber }   from './components/OrbitScrubber'
 import { MissionLog }      from './components/MissionLog'
 import { PassPredictor }   from './components/PassPredictor'
-import { PUBLIC_READ_ONLY } from './config'
 
 // ── Beep sound (Web Audio API — no external file needed) ─────
 function playBeep() {
@@ -83,206 +87,169 @@ function useCriticalAlert() {
   return hasCritical
 }
 
+// ── Hook: which dashboard section the user is looking at ──────
+// Sections that share a grid row tie on position; the last one the
+// user navigated to keeps the highlight, otherwise the first wins.
+const SECTION_ORDER: SectionId[] = ['hero', 'fleet', 'globe', 'scan', 'alerts', 'passes', 'status', 'log']
+
+function useActiveSection(scrollRef: React.RefObject<HTMLElement>) {
+  const [active, setActive] = useState<SectionId>('hero')
+  const activeRef = useRef<SectionId>('hero')
+  const suppressUntil = useRef(0)
+
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+
+    function onScroll() {
+      if (!container || Date.now() < suppressUntil.current) return
+      const containerTop = container.getBoundingClientRect().top
+      let bestTop = -Infinity
+      let candidates: SectionId[] = []
+      for (const id of SECTION_ORDER) {
+        const el = document.getElementById(id)
+        if (!el) continue
+        const top = Math.round(el.getBoundingClientRect().top - containerTop)
+        if (top > 120) continue
+        if (top > bestTop) { bestTop = top; candidates = [id] }
+        else if (top === bestTop) candidates.push(id)
+      }
+      const next = candidates.includes(activeRef.current) ? activeRef.current : (candidates[0] ?? 'hero')
+      activeRef.current = next
+      setActive(next)
+    }
+
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => container.removeEventListener('scroll', onScroll)
+  }, [scrollRef])
+
+  const navigate = useCallback((id: SectionId) => {
+    activeRef.current = id
+    setActive(id)
+    suppressUntil.current = Date.now() + 800
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  return { active, navigate }
+}
+
+const LEGEND = [
+  { colour: '#facc15', label: 'Spacecraft' },
+  { colour: '#3b82f6', label: 'Orbit track' },
+  { colour: '#dc2626', label: 'Critical debris' },
+  { colour: '#ea580c', label: 'High debris' },
+  { colour: '#ca8a04', label: 'Moderate debris' },
+]
+
 export default function App() {
-   const hasCritical = useCriticalAlert()
-   const persistenceLoading = useStore(state => state.persistenceLoading)
-   const persistenceReady = useStore(state => state.persistenceReady)
-   const persistenceError = useStore(state => state.persistenceError)
-   const hydratePersistentState = useStore(state => state.hydratePersistentState)
-   const clearPersistenceError = useStore(state => state.clearPersistenceError)
-   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-     return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
-   })
+  const hasCritical = useCriticalAlert()
+  const connected = useLiveFeed()
+  const fleet = useStore(state => state.fleet)
+  const persistenceLoading = useStore(state => state.persistenceLoading)
+  const persistenceReady = useStore(state => state.persistenceReady)
+  const persistenceError = useStore(state => state.persistenceError)
+  const hydratePersistentState = useStore(state => state.hydratePersistentState)
+  const clearPersistenceError = useStore(state => state.clearPersistenceError)
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
+  const scrollRef = useRef<HTMLElement>(null)
+  const { active, navigate } = useActiveSection(scrollRef)
 
-   useEffect(() => {
-     void hydratePersistentState()
-   }, [hydratePersistentState])
+  const alertCount = fleet.reduce(
+    (n, m) => n + m.events.filter(ev => ev.risk_level === 'CRITICAL' || ev.risk_level === 'HIGH').length,
+    0,
+  )
 
-   useEffect(() => {
-     document.documentElement.setAttribute('data-theme', theme)
-     localStorage.setItem('theme', theme)
-   }, [theme])
+  useEffect(() => {
+    void hydratePersistentState()
+  }, [hydratePersistentState])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    try { localStorage.setItem('theme', theme) } catch { /* storage unavailable */ }
+  }, [theme])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
+    <div className="app-shell">
+      <Sidebar active={active} alertCount={alertCount} connected={connected} onNavigate={navigate} />
 
-      {(persistenceLoading || persistenceError) && (
-        <div role="status" style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '7px 14px', background: persistenceError ? '#7f1d1d' : '#1e3a5f',
-          color: '#fff', fontSize: '11px', flexShrink: 0,
-        }}>
-          <span style={{ flex: 1 }}>
-            {persistenceError ?? 'Loading fleet and operator history from the database…'}
-          </span>
-          {persistenceError && !persistenceReady && (
-            <button onClick={() => { void hydratePersistentState() }} style={{ cursor: 'pointer' }}>Retry</button>
-          )}
-          {persistenceError && persistenceReady && (
-            <button onClick={clearPersistenceError} style={{ cursor: 'pointer' }}>Dismiss</button>
-          )}
-        </div>
-      )}
+      <div className="app-main">
+        <TopBar
+          connected={connected}
+          hasCritical={hasCritical}
+          alertCount={alertCount}
+          theme={theme}
+          onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          onOpenAlerts={() => navigate('alerts')}
+        />
 
-      {/* Blink keyframes — injected once */}
-      <style>{`
-        @keyframes criticalBlink {
-          0%, 100% { background-color: #7f1d1d; }
-          50%      { background-color: #dc2626; }
-        }
-        @keyframes criticalPulseDot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50%      { opacity: 0.4; transform: scale(1.3); }
-        }
-      `}</style>
-
-      {/* ── Top bar ─────────────────────────────────────────── */}
-      <header style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 20px',
-        height: '48px',
-        background: hasCritical ? undefined : 'var(--surface)',
-        animation: hasCritical ? 'criticalBlink 1s infinite' : undefined,
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-        gap: '12px',
-        transition: 'background-color 0.3s',
-      }}>
-        <span style={{ fontSize: '18px' }}>🛡️</span>
-        <span style={{ fontWeight: 800, fontSize: '15px', letterSpacing: '0.05em' }}>
-          ORBITAL GUARDIAN
-        </span>
-        <span style={{
-          fontSize: '10px',
-          color: 'var(--muted)',
-          fontWeight: 400,
-          borderLeft: '1px solid var(--border)',
-          paddingLeft: '12px',
-          marginLeft: '4px',
-        }}>
-          Space Debris Conjunction & Risk Platform
-        </span>
-
-        {PUBLIC_READ_ONLY && (
-          <span style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '999px',
-            color: 'var(--muted)',
-            fontSize: '9px',
-            fontWeight: 700,
-            letterSpacing: '0.05em',
-            padding: '3px 8px',
+        {(persistenceLoading || persistenceError) && (
+          <div role="status" style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '7px 20px', background: persistenceError ? '#7f1d1d' : '#0c4a6e',
+            color: '#fff', fontSize: '11px', flexShrink: 0,
           }}>
-            PUBLIC VIEW ONLY
-          </span>
-        )}
-
-        {hasCritical && (
-          <span style={{
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(0,0,0,0.25)',
-            padding: '4px 12px',
-            borderRadius: '999px',
-            fontSize: '11px',
-            fontWeight: 800,
-            color: '#fff',
-            letterSpacing: '0.05em',
-          }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: '#fff',
-              animation: 'criticalPulseDot 1s infinite',
-            }} />
-            CRITICAL CONJUNCTION DETECTED
-          </span>
-        )}
-
-        <button
-          onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-          style={{
-            marginLeft: hasCritical ? '10px' : 'auto',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            color: 'var(--text)',
-            fontSize: '13px',
-            padding: '5px 10px',
-            cursor: 'pointer',
-          }}
-        >
-          {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
-        </button>
-      </header>
-
-      {/* ── Live telemetry bar ───────────────────────────────── */}
-      <LiveStatus />
-
-      {/* ── Main content ────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-
-        {/* 3D Globe — takes all remaining width, always at least 400px */}
-        <div style={{ flex: 1, position: 'relative', minWidth: '400px' }}>
-          <Globe />
-
-          {/* TCA countdown overlay — top right of globe */}
-          <TCAOverlay />
-
-          {/* Orbit playback scrubber — bottom of globe */}
-          <OrbitScrubber />
-
-          {/* Heatmap panel — bottom left of globe */}
-          <HeatmapPanel />
-
-          {/* Legend overlay */}
-          <div style={{
-            position: 'absolute',
-            top: '14px',
-            left: '14px',
-            background: 'rgba(10,14,26,0.85)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            fontSize: '11px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '5px',
-          }}>
-            {[
-              { colour: '#facc15', label: 'Spacecraft' },
-              { colour: '#3b82f6', label: 'Orbit track' },
-              { colour: '#dc2626', label: 'Critical debris' },
-              { colour: '#ea580c', label: 'High debris' },
-              { colour: '#ca8a04', label: 'Moderate debris' },
-            ].map(({ colour, label }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: colour, flexShrink: 0 }} />
-                <span style={{ color: 'var(--muted)' }}>{label}</span>
-              </div>
-            ))}
+            <span style={{ flex: 1 }}>
+              {persistenceError ?? 'Loading fleet and operator history from the database…'}
+            </span>
+            {persistenceError && !persistenceReady && (
+              <button onClick={() => { void hydratePersistentState() }} style={{ cursor: 'pointer' }}>Retry</button>
+            )}
+            {persistenceError && persistenceReady && (
+              <button onClick={clearPersistenceError} style={{ cursor: 'pointer' }}>Dismiss</button>
+            )}
           </div>
-        </div>
+        )}
 
-        {/* Fleet manager — new sidebar */}
-        <FleetManager />
-        <FleetPanel />
+        <main className="app-scroll" ref={scrollRef}>
+          <div className="dashboard">
+            <SpacecraftHero />
+            <TelemetryPanel connected={connected} />
+            <FleetManager />
 
-        {/* Alert dashboard — fixed right panel */}
-        <AlertDashboard />
+            {/* 3D globe with its overlays; always dark so overlays stay legible */}
+            <section id="globe" className="panel area-globe" data-theme="dark" style={{ display: 'block' }} aria-label="3D tracking globe">
+              <Globe />
+              <TCAOverlay />
+              <OrbitScrubber />
+              <HeatmapPanel />
 
-        {/* Mission log — operator decision audit trail */}
-        <MissionLog />
+              <div style={{
+                position: 'absolute',
+                top: '14px',
+                left: '14px',
+                background: 'var(--overlay)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                fontSize: '11px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                backdropFilter: 'blur(6px)',
+              }}>
+                {LEGEND.map(({ colour, label }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: colour, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--muted)' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
 
-        {/* Pass predictor — ground station contact windows */}
-        <PassPredictor />
+            <ControlPanel />
+            <AlertDashboard />
+            <PassPredictor />
+            <FleetPanel />
+            <MissionLog />
+          </div>
+        </main>
       </div>
-
-      {/* ── Bottom control panel ────────────────────────────── */}
-      <ControlPanel />
     </div>
   )
 }

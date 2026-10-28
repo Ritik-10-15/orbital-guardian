@@ -100,7 +100,7 @@ export function TCAOverlay() {
       position: 'absolute',
       top: '14px',
       right: '14px',
-      background: 'rgba(10,14,26,0.88)',
+      background: 'var(--overlay)',
       border: `1px solid ${RISK_COLOURS[worst.risk_level]}55`,
       borderRadius: '8px',
       padding: '10px 14px',

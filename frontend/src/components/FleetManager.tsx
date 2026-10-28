@@ -1,11 +1,13 @@
 // ============================================================
 // src/components/FleetManager.tsx
 // Option F — Add / remove spacecraft from fleet
-// Width-collapse: shrinks to a thin strip instead of just hiding content
+// Rendered as the "fleet" panel of the dashboard grid
 // ✦ Altitude sparkline per spacecraft
 // ============================================================
 
 import React, { useState } from 'react'
+import { Satellite } from 'lucide-react'
+import { PanelHeader } from './PanelHeader'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { SPACECRAFT_PRESETS } from '../types'
@@ -48,7 +50,6 @@ function AltSparkline({ points, colour }: { points: OrbitPoint[]; colour: string
 export function FleetManager() {
   const { fleet, addToFleet, removeFromFleet, toggleFleetMember, activeFleetId, setActiveFleetId } = useStore()
   const [showAdd, setShowAdd] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
   const [customName,  setCustomName]  = useState('')
   const [customLine1, setCustomLine1] = useState('')
   const [customLine2, setCustomLine2] = useState('')
@@ -79,111 +80,28 @@ export function FleetManager() {
     outline: 'none',
   }
 
-  if (collapsed) {
-    return (
-      <div style={{
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
-        width: '44px',
-        minWidth: '44px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: '10px',
-        gap: '8px',
-      }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Expand Fleet panel"
-          style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--muted)',
-            fontSize: '12px',
-            padding: '6px 8px',
-            cursor: 'pointer',
-          }}
-        >
-          ◀
-        </button>
-        <span style={{ fontSize: '16px' }}>🛰</span>
-        <span style={{
-          fontSize: '10px',
-          color: 'var(--muted)',
-          writingMode: 'vertical-rl',
-          textOrientation: 'mixed',
-        }}>
-          {fleet.length} spacecraft
-        </span>
-      </div>
-    )
-  }
-
   return (
-    <div style={{
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      width: '280px',
-      minWidth: '280px',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '13px' }}>🛰 Fleet</span>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <span style={{
-            background: 'var(--surface2)',
-            borderRadius: '999px',
-            padding: '1px 8px',
-            fontSize: '11px',
-            color: 'var(--muted)',
-          }}>
-            {fleet.length} spacecraft
-          </span>
+    <section id="fleet" className="panel area-fleet">
+      <PanelHeader icon={Satellite} title="Fleet">
+        <span className="chip">{fleet.length} spacecraft</span>
+        {!PUBLIC_READ_ONLY && (
           <button
-            onClick={() => setCollapsed(true)}
-            title="Collapse Fleet panel"
+            onClick={() => setShowAdd(s => !s)}
             style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: '4px',
-              color: 'var(--muted)',
+              background: showAdd ? 'var(--surface2)' : 'var(--accent-strong)',
+              border: showAdd ? '1px solid var(--border)' : '1px solid transparent',
+              borderRadius: '6px',
+              color: showAdd ? 'var(--text)' : '#fff',
               fontSize: '11px',
-              padding: '3px 8px',
+              fontWeight: 700,
+              padding: '3px 10px',
               cursor: 'pointer',
             }}
           >
-            ▶
+            {showAdd ? 'Close' : '+ Add'}
           </button>
-          {!PUBLIC_READ_ONLY && (
-            <button
-              onClick={() => setShowAdd(s => !s)}
-              style={{
-                background: 'var(--accent)',
-                border: 'none',
-                borderRadius: '4px',
-                color: '#fff',
-                fontSize: '11px',
-                fontWeight: 700,
-                padding: '3px 10px',
-                cursor: 'pointer',
-              }}
-            >
-              {showAdd ? '✕' : '+ Add'}
-            </button>
-          )}
-        </div>
-      </div>
+        )}
+      </PanelHeader>
 
       {/* Add spacecraft panel */}
       {showAdd && !PUBLIC_READ_ONLY && (
@@ -343,6 +261,6 @@ export function FleetManager() {
           )
         })}
       </div>
-    </div>
+    </section>
   )
 }
