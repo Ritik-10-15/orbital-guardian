@@ -7,6 +7,12 @@
 Built for the **AI Builders Challenge with IBM Bob** — August 2026 theme: **Advance Space Exploration with AI**.
 *(Directly matches the challenge's own example idea: "Space debris tracking and collision avoidance systems.")*
 
+## 🚀 Live Demo
+
+**[http://ec2-3-133-156-41.us-east-2.compute.amazonaws.com](http://ec2-3-133-156-41.us-east-2.compute.amazonaws.com)**
+
+No login needed. Pick a spacecraft in the fleet panel, watch it on the 3D globe, then review the conjunction alerts and approve or reject an avoidance manoeuvre. The demo is shared by all visitors and uses demo data only. It runs on a single AWS EC2 instance; see the [AWS Free Tier demo guide](DEPLOY_AWS_FREE.md).
+
 ---
 
 ## Problem Statement
@@ -88,7 +94,7 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 
 ## Proposed AWS Architecture (Design Only)
 
-This is a documented target architecture for Orbital Guardian. It is not deployed, and this repository does not create AWS resources. The design keeps the React frontend, FastAPI/WebSocket backend, and PostgreSQL persistence in separate AWS services:
+This is a documented target architecture for Orbital Guardian. It is not deployed; the [live demo](#-live-demo) uses the simpler single-instance setup described below. The design keeps the React frontend, FastAPI/WebSocket backend, and PostgreSQL persistence in separate AWS services:
 
 ```mermaid
 flowchart TD
@@ -114,7 +120,7 @@ flowchart TD
 | **AWS Secrets Manager** | Holds database credentials outside the source code and container image. |
 | **AWS WAF + CloudWatch** | Restricts access for a no-auth demo and provides logs, health metrics, and alarms. |
 
-For a portfolio demo, the design assumes synthetic data because the app does not yet have user authentication. The [AWS Free Tier demo guide](DEPLOY_AWS_FREE.md) uses a single EC2 instance and local PostgreSQL volume to reduce service count. The separate [AWS production-style runbook](DEPLOYMENT.md) describes a larger architecture and is not a Free Tier guarantee. No AWS resources have been provisioned. The [Render deployment guide](DEPLOY_RENDER.md) remains an alternative.
+For a portfolio demo, the design assumes synthetic data because the app does not yet have user authentication. The [live demo](#-live-demo) is deployed with the [AWS Free Tier demo guide](DEPLOY_AWS_FREE.md), which uses a single EC2 instance and local PostgreSQL volume to reduce service count. The separate [AWS production-style runbook](DEPLOYMENT.md) describes a larger architecture and is not a Free Tier guarantee. The [Render deployment guide](DEPLOY_RENDER.md) remains an alternative.
 
 **Resume wording:** “Designed a proposed AWS architecture for a FastAPI and React application using CloudFront, private S3 with Origin Access Control, EC2, RDS PostgreSQL, IAM, Secrets Manager, Systems Manager, and WAF.”
 
