@@ -13,6 +13,9 @@ python-dotenv>=1.0          # Loads OPENAI_API_KEY / SPACETRACK_* from .env
 fastapi>=0.111               # REST + WebSocket API (api.py)
 uvicorn[standard]>=0.29      # ASGI server with WebSocket support
 pydantic>=2.7                # Request/response schema validation (bundled with FastAPI 2.x)
+SQLAlchemy>=2.0              # PostgreSQL ORM and transaction handling
+psycopg[binary]>=3.2         # PostgreSQL driver
+alembic>=1.13                # Versioned database migrations
 
 # ── HTTP client ──────────────────────────────────────────────
 httpx>=0.27                  # CelesTrak/Space-Track fetches (api.py) + test client

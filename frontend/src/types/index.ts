@@ -107,6 +107,14 @@ export interface FleetMember {
   active:       boolean         // visible on globe
 }
 
+/** Server-owned fleet configuration; computed fields are filled locally. */
+export interface FleetMemberRecord {
+  id: string
+  tle: TLESchema
+  colour: string
+  active: boolean
+}
+
 /** Fleet-level scan result from /fleet/scan */
 export interface FleetScanResult {
   spacecraft_name: string
@@ -203,9 +211,11 @@ export const SPACECRAFT_PRESETS: SpacecraftPreset[] = [
 ]
 // ── Operator approval workflow ──────────────────────────────
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type MissionLogDecision = 'APPROVED' | 'REJECTED' | 'CLEARED'
 
 export interface ApprovalRecord {
-  event_key:        string          // unique id for the event (debris_name + tca)
+  event_key:        string
+  spacecraft_id:    string
   status:           ApprovalStatus
   decided_at:       string | null   // ISO timestamp, null if still pending
   decided_miss_km:  number          // the simulated miss distance at time of decision
@@ -213,24 +223,36 @@ export interface ApprovalRecord {
   notes:            string          // optional operator note
 }
 
-export function eventKey(ev: { debris_name: string; tca: string }): string {
-  return `${ev.debris_name}__${ev.tca}`
+export function eventKey(ev: { debris_name: string; tca: string }, spacecraftId = 'legacy'): string {
+  const parsedTca = new Date(ev.tca)
+  const canonicalTca = Number.isNaN(parsedTca.getTime()) ? ev.tca : parsedTca.toISOString()
+  return `${spacecraftId}__${ev.debris_name}__${canonicalTca}`
 }
 
 // ── Mission log ─────────────────────────────────────────────
 export interface MissionLogEntry {
   id:               string          // uuid-style unique key
+  request_id?:      string | null
   logged_at:        string          // ISO timestamp
+  spacecraft_id?:   string | null
   spacecraft_name:  string
   debris_name:      string
   tca:              string
   miss_distance_km: number
   risk_score:       number
   risk_level:       RiskLevel
-  decision:         ApprovalStatus
+  decision:         MissionLogDecision
   notes:            string
   simulated_miss_km: number         // miss distance at time of decision (post-manoeuvre)
   simulated_score:  number
+}
+
+export interface MissionLogPage {
+  items: MissionLogEntry[]
+  total: number
+  offset: number
+  limit: number
+  has_more: boolean
 }
 
 // ── Ground station pass predictor ───────────────────────────

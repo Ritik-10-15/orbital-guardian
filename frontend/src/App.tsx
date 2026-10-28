@@ -17,6 +17,7 @@ import { TCAOverlay }      from './components/TCAOverlay'
 import { OrbitScrubber }   from './components/OrbitScrubber'
 import { MissionLog }      from './components/MissionLog'
 import { PassPredictor }   from './components/PassPredictor'
+import { PUBLIC_READ_ONLY } from './config'
 
 // ── Beep sound (Web Audio API — no external file needed) ─────
 function playBeep() {
@@ -84,9 +85,18 @@ function useCriticalAlert() {
 
 export default function App() {
    const hasCritical = useCriticalAlert()
+   const persistenceLoading = useStore(state => state.persistenceLoading)
+   const persistenceReady = useStore(state => state.persistenceReady)
+   const persistenceError = useStore(state => state.persistenceError)
+   const hydratePersistentState = useStore(state => state.hydratePersistentState)
+   const clearPersistenceError = useStore(state => state.clearPersistenceError)
    const [theme, setTheme] = useState<'dark' | 'light'>(() => {
      return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
    })
+
+   useEffect(() => {
+     void hydratePersistentState()
+   }, [hydratePersistentState])
 
    useEffect(() => {
      document.documentElement.setAttribute('data-theme', theme)
@@ -95,6 +105,24 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
+
+      {(persistenceLoading || persistenceError) && (
+        <div role="status" style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '7px 14px', background: persistenceError ? '#7f1d1d' : '#1e3a5f',
+          color: '#fff', fontSize: '11px', flexShrink: 0,
+        }}>
+          <span style={{ flex: 1 }}>
+            {persistenceError ?? 'Loading fleet and operator history from the database…'}
+          </span>
+          {persistenceError && !persistenceReady && (
+            <button onClick={() => { void hydratePersistentState() }} style={{ cursor: 'pointer' }}>Retry</button>
+          )}
+          {persistenceError && persistenceReady && (
+            <button onClick={clearPersistenceError} style={{ cursor: 'pointer' }}>Dismiss</button>
+          )}
+        </div>
+      )}
 
       {/* Blink keyframes — injected once */}
       <style>{`
@@ -135,6 +163,21 @@ export default function App() {
         }}>
           Space Debris Conjunction & Risk Platform
         </span>
+
+        {PUBLIC_READ_ONLY && (
+          <span style={{
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '999px',
+            color: 'var(--muted)',
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            padding: '3px 8px',
+          }}>
+            PUBLIC VIEW ONLY
+          </span>
+        )}
 
         {hasCritical && (
           <span style={{

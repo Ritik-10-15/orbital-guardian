@@ -7,6 +7,12 @@
 Built for the **AI Builders Challenge with IBM Bob** — August 2026 theme: **Advance Space Exploration with AI**.
 *(Directly matches the challenge's own example idea: "Space debris tracking and collision avoidance systems.")*
 
+## 🚀 Live Demo
+
+**[http://ec2-3-133-156-41.us-east-2.compute.amazonaws.com](http://ec2-3-133-156-41.us-east-2.compute.amazonaws.com)**
+
+No login needed. Pick a spacecraft in the fleet panel, watch it on the 3D globe, then review the conjunction alerts and approve or reject an avoidance manoeuvre. The demo is shared by all visitors and uses demo data only. It runs on a single AWS EC2 instance; see the [AWS Free Tier demo guide](DEPLOY_AWS_FREE.md).
+
 ---
 
 ## Problem Statement
@@ -88,7 +94,7 @@ Every panel width-collapses so the globe can take the full screen; a mission-con
 
 ## Proposed AWS Architecture (Design Only)
 
-This is a documented target architecture for Orbital Guardian. It is not deployed, and this repository does not create AWS resources. The design keeps the React frontend, FastAPI/WebSocket backend, and PostgreSQL persistence in separate AWS services:
+This is a documented target architecture for Orbital Guardian. It is not deployed; the [live demo](#-live-demo) uses the simpler single-instance setup described below. The design keeps the React frontend, FastAPI/WebSocket backend, and PostgreSQL persistence in separate AWS services:
 
 ```mermaid
 flowchart TD
@@ -114,7 +120,7 @@ flowchart TD
 | **AWS Secrets Manager** | Holds database credentials outside the source code and container image. |
 | **AWS WAF + CloudWatch** | Restricts access for a no-auth demo and provides logs, health metrics, and alarms. |
 
-For a portfolio demo, the design assumes synthetic data and an IP allowlist because the app does not yet have user authentication. The separate [AWS deployment runbook](DEPLOYMENT.md) records implementation considerations and the current deployment plan. No AWS resources have been provisioned.
+For a portfolio demo, the design assumes synthetic data because the app does not yet have user authentication. The [live demo](#-live-demo) is deployed with the [AWS Free Tier demo guide](DEPLOY_AWS_FREE.md), which uses a single EC2 instance and local PostgreSQL volume to reduce service count. The separate [AWS production-style runbook](DEPLOYMENT.md) describes a larger architecture and is not a Free Tier guarantee. The [Render deployment guide](DEPLOY_RENDER.md) remains an alternative.
 
 **Resume wording:** “Designed a proposed AWS architecture for a FastAPI and React application using CloudFront, private S3 with Origin Access Control, EC2, RDS PostgreSQL, IAM, Secrets Manager, Systems Manager, and WAF.”
 
@@ -169,11 +175,13 @@ cd frontend
 npm install
 ```
 
-### 2 — Configure environment (optional)
+### 2 — Configure environment
 
 ```bash
 cp backend/.env.example backend/.env
 ```
+
+This file is required by Docker Compose. The credentials below are optional and can be left as the example values if you do not use those features.
 
 ```env
 # Optional — enables the full Space-Track debris catalog
@@ -190,7 +198,9 @@ The app runs fully without either variable — it falls back to rule-based insig
 
 **Terminal 1 — Backend:**
 ```bash
+docker compose up -d db
 cd backend
+alembic upgrade head
 python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -205,17 +215,20 @@ npm run dev
 ### 4 — Or use Docker
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 Then open `http://localhost:3000`
 
 ---
+
+Fleet configuration, operator approvals, and mission history now persist in PostgreSQL. Docker Compose starts PostgreSQL, applies the Alembic migration, then starts the API and frontend. On first startup, the frontend imports the old Zustand localStorage records once and removes the old key only after a successful import.
 
 ## API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET`  | `/health` | Liveness probe |
+| `GET`  | `/ready` | Database readiness probe |
 | `GET`  | `/tle/fetch` | Fetch TLE catalog from CelesTrak |
 | `POST` | `/orbits/track` | Propagate TLE → lat/lon/alt ground track |
 | `POST` | `/conjunctions` | Run conjunction analysis |
@@ -230,6 +243,15 @@ Then open `http://localhost:3000`
 | `POST` | `/ai/early-warning` | Full scan + anomaly detection |
 | `GET`  | `/ai/status` | AI feature status |
 | `POST` | `/passes/predict` | Ground-station contact-window prediction (AOS, LOS, max elevation) |
+| `GET`  | `/fleet` | Read persisted fleet configuration |
+| `POST` | `/fleet` | Add a persisted fleet member |
+| `PATCH` | `/fleet/{id}` | Update fleet TLE, color, or active flag |
+| `DELETE` | `/fleet/{id}` | Remove a fleet member while retaining mission history |
+| `GET` | `/approvals` | Read current operator decisions |
+| `PUT` | `/approvals` | Save a decision and append its audit row atomically |
+| `POST` | `/approvals/clear` | Clear the current decision and append a history row |
+| `GET` | `/mission-log` | Read paginated, append-only operator history |
+| `POST` | `/state/import-local` | One-time import of the browser's legacy Zustand data |
 | `WS`   | `/ws/live` | Live orbit position stream |
 
 Full interactive docs: `http://127.0.0.1:8000/docs`
@@ -319,6 +341,8 @@ The following real spacecraft are available as one-click presets in the Fleet Ma
 |-------|-----------|
 | **Backend language** | Python 3.12 |
 | **Web framework** | FastAPI + Uvicorn (ASGI, WebSocket) |
+| **Persistence** | PostgreSQL + SQLAlchemy 2 + Psycopg |
+| **Schema migrations** | Alembic |
 | **Orbital mechanics** | sgp4 ≥ 2.22 |
 | **Numerics** | NumPy |
 | **ML / anomaly detection** | scikit-learn (IsolationForest) |
@@ -327,7 +351,7 @@ The following real spacecraft are available as one-click presets in the Fleet Ma
 | **Frontend framework** | React 18 + TypeScript 5 |
 | **Build tool** | Vite 5 |
 | **3D rendering** | Three.js + @react-three/fiber + drei |
-| **State management** | Zustand 4 (with localStorage persistence) |
+| **State management** | Zustand 4 (server-owned fleet, approvals, and mission history; transient telemetry) |
 | **Containerisation** | Docker + Docker Compose |
 | **Production serving** | nginx:alpine |
 

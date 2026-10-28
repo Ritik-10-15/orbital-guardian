@@ -1,6 +1,8 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ARG VITE_PUBLIC_READ_ONLY=false
+ENV VITE_PUBLIC_READ_ONLY=${VITE_PUBLIC_READ_ONLY}
 COPY package*.json ./
 RUN npm ci
 COPY . .

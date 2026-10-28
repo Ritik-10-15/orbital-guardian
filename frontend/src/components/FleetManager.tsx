@@ -10,6 +10,7 @@ import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { SPACECRAFT_PRESETS } from '../types'
 import type { TLESchema, OrbitPoint } from '../types'
+import { PUBLIC_READ_ONLY } from '../config'
 
 // ── Inline SVG altitude sparkline ────────────────────────────
 function AltSparkline({ points, colour }: { points: OrbitPoint[]; colour: string }) {
@@ -164,26 +165,28 @@ export function FleetManager() {
           >
             ▶
           </button>
-          <button
-            onClick={() => setShowAdd(s => !s)}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: '4px',
-              color: '#fff',
-              fontSize: '11px',
-              fontWeight: 700,
-              padding: '3px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            {showAdd ? '✕' : '+ Add'}
-          </button>
+          {!PUBLIC_READ_ONLY && (
+            <button
+              onClick={() => setShowAdd(s => !s)}
+              style={{
+                background: 'var(--accent)',
+                border: 'none',
+                borderRadius: '4px',
+                color: '#fff',
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '3px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              {showAdd ? '✕' : '+ Add'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Add spacecraft panel */}
-      {showAdd && (
+      {showAdd && !PUBLIC_READ_ONLY && (
         <div style={{
           padding: '10px 14px',
           borderBottom: '1px solid var(--border)',
@@ -299,40 +302,42 @@ export function FleetManager() {
                     ? `${member.events.length} events  •  scanned`
                     : 'Not scanned'}
                 </span>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); toggleFleetMember(member.id) }}
-                    title={member.active ? 'Hide on globe' : 'Show on globe'}
-                    style={{
-                      padding: '2px 6px',
-                      fontSize: '10px',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '3px',
-                      color: 'var(--muted)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {member.active ? '👁' : '🚫'}
-                  </button>
-                  {fleet.length > 1 && (
+                {!PUBLIC_READ_ONLY && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
                     <button
-                      onClick={e => { e.stopPropagation(); removeFromFleet(member.id) }}
-                      title="Remove from fleet"
+                      onClick={e => { e.stopPropagation(); toggleFleetMember(member.id) }}
+                      title={member.active ? 'Hide on globe' : 'Show on globe'}
                       style={{
                         padding: '2px 6px',
                         fontSize: '10px',
                         background: 'var(--surface)',
                         border: '1px solid var(--border)',
                         borderRadius: '3px',
-                        color: '#dc2626',
+                        color: 'var(--muted)',
                         cursor: 'pointer',
                       }}
                     >
-                      ✕
+                      {member.active ? '👁' : '🚫'}
                     </button>
-                  )}
-                </div>
+                    {fleet.length > 1 && (
+                      <button
+                        onClick={e => { e.stopPropagation(); removeFromFleet(member.id) }}
+                        title="Remove from fleet"
+                        style={{
+                          padding: '2px 6px',
+                          fontSize: '10px',
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '3px',
+                          color: '#dc2626',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )

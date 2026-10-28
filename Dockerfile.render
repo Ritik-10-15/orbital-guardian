@@ -1,0 +1,26 @@
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /frontend
+ARG VITE_PUBLIC_READ_ONLY=false
+ENV VITE_PUBLIC_READ_ONLY=${VITE_PUBLIC_READ_ONLY}
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ ./
+COPY --from=frontend-build /frontend/dist ./static
+RUN mkdir -p /app/data
+
+ENV PORT=10000 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+EXPOSE 10000
+
+# Render injects PORT. Run the database migration before serving traffic.
+CMD ["sh", "-c", "alembic upgrade head && exec python -m uvicorn api:app --host 0.0.0.0 --port ${PORT:-10000}"]

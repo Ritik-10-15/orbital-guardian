@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Single-instance Orbital Guardian demo for eligible AWS Free Tier accounts.
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Default: https://github.com/Ritik-10-15/orbital-guardian.git
+    AllowedPattern: '^https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+([.]git)?$'
+    Description: Public HTTPS GitHub repository containing the deployment files.
+  GitHubBranch:
+    Type: String
+    Default: aws-free-tier-deploy
+    AllowedPattern: ^[A-Za-z0-9._/-]+$
+    Description: Branch that contains docker-compose.aws-free.yml and the application source.
+  LatestArmAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+    Description: Latest Amazon Linux 2023 ARM64 AMI.
+
+Resources:
+  AppInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AppInstanceRole
+
+  AppVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.74.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-igw
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AppVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppVpc
+      CidrBlock: 10.74.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-public
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AppVpc
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-public
+
+  DefaultInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public web access; server administration uses Session Manager.
+      VpcId: !Ref AppVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-web
+
+  AppInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - DefaultInternetRoute
+      - PublicSubnetRouteTableAssociation
+    Properties:
+      ImageId: !Ref LatestArmAmi
+      InstanceType: t4g.small
+      IamInstanceProfile: !Ref AppInstanceProfile
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          SubnetId: !Ref PublicSubnet
+          GroupSet:
+            - !Ref AppSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: orbital-guardian-free-demo
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            set -euxo pipefail
+            dnf update -y
+            # Amazon Linux 2023 ships curl-minimal, which already provides `curl`.
+            # Installing the separate curl package conflicts with curl-minimal.
+            dnf install -y docker git openssl
+            systemctl enable --now docker
+            systemctl enable --now amazon-ssm-agent
+
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -fsSL --retry 5 https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            # Compose build needs buildx, which the AL2023 docker package does not include.
+            BUILDX_LATEST_URL="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/docker/buildx/releases/latest)"
+            BUILDX_VERSION="${!BUILDX_LATEST_URL##*/}"
+            curl -fsSL --retry 5 "https://github.com/docker/buildx/releases/download/${!BUILDX_VERSION}/buildx-${!BUILDX_VERSION}.linux-arm64" -o /usr/local/lib/docker/cli-plugins/docker-buildx
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+
+            if [ ! -f /swapfile ]; then
+              fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+              echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+            fi
+
+            git clone --depth 1 --single-branch --branch '${GitHubBranch}' '${GitHubRepoUrl}' /opt/orbital-guardian
+            chown -R ec2-user:ec2-user /opt/orbital-guardian
+            cd /opt/orbital-guardian
+            DB_PASSWORD="$(openssl rand -hex 24)"
+            cat > .env.aws <<EOF
+            DB_PASSWORD=$DB_PASSWORD
+            POSTGRES_USER=orbital
+            POSTGRES_DB=orbital_guardian
+            PUBLIC_READ_ONLY=false
+            VITE_PUBLIC_READ_ONLY=false
+            ALLOW_LOCAL_STATE_IMPORT=false
+            OPENAI_API_KEY=
+            SPACETRACK_USER=
+            SPACETRACK_PASS=
+            CELESTRAK_USER_AGENT=OrbitalGuardian/1.0 (educational project)
+            MAX_DEBRIS_OBJECTS=200
+            EOF
+            chown root:root .env.aws
+            chmod 600 .env.aws
+
+            docker compose --env-file .env.aws -f docker-compose.aws-free.yml build
+            docker compose --env-file .env.aws -f docker-compose.aws-free.yml up -d
+
+Outputs:
+  AppUrl:
+    Description: Public demo URL. It uses HTTP and the hostname can change after stopping the instance.
+    Value: !Sub http://${AppInstance.PublicDnsName}
+  InstanceId:
+    Description: EC2 instance ID for administration and cleanup.
+    Value: !Ref AppInstance
+  AdminAccess:
+    Description: Use Systems Manager Session Manager from the EC2 console.
+    Value: Open EC2 Instances, select this instance, choose Connect, then Session Manager.
