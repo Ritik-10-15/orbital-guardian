@@ -5,12 +5,13 @@
 // ============================================================
 
 import React, { useState } from 'react'
+import { ClipboardList } from 'lucide-react'
+import { PanelHeader } from './PanelHeader'
 import { useStore } from '../store/useStore'
 import { api } from '../api/client'
 import type { MissionLogEntry } from '../types'
 import { RISK_COLOURS } from '../types'
 
-// Starts collapsed — only expands when user clicks the strip
 
 function exportLogCSV(log: MissionLogEntry[]) {
   const rows: string[] = []
@@ -146,7 +147,6 @@ function LogRow({ entry }: { entry: MissionLogEntry }) {
 
 export function MissionLog() {
   const { missionLog, missionLogTotal, missionLogHasMore, missionLogLoadingMore, loadMoreMissionLog } = useStore()
-  const [collapsed, setCollapsed] = useState(true)   // starts collapsed
   const [filter, setFilter] = useState<'ALL' | 'APPROVED' | 'REJECTED' | 'CLEARED'>('ALL')
   const [exporting, setExporting] = useState(false)
 
@@ -166,52 +166,9 @@ export function MissionLog() {
     }
   }
 
-  if (collapsed) {
-    return (
-      <div style={{
-        width: '44px', minWidth: '44px',
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        paddingTop: '10px', gap: '8px',
-      }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Expand Mission Log"
-          style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: '4px', color: 'var(--muted)', fontSize: '12px',
-            padding: '6px 8px', cursor: 'pointer',
-          }}
-        >◀</button>
-        <span style={{ fontSize: '16px' }}>📋</span>
-        {missionLogTotal > 0 && (
-          <span style={{
-            background: '#1d4ed8', color: '#fff', borderRadius: '999px',
-            width: 18, height: 18, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: '10px', fontWeight: 700,
-          }}>{missionLogTotal}</span>
-        )}
-      </div>
-    )
-  }
-
   return (
-    <div style={{
-      width: '300px', minWidth: '300px',
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: '8px',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '13px', flex: 1 }}>📋 Mission Log</span>
+    <section id="log" className="panel area-log">
+      <PanelHeader icon={ClipboardList} title="Mission Log">
         <span style={{ fontSize: '10px', color: '#22c55e' }}>{approvedCount} ✓</span>
         <span style={{ fontSize: '10px', color: '#ef4444' }}>{rejectedCount} ✕</span>
         <button
@@ -219,20 +176,13 @@ export function MissionLog() {
           disabled={missionLogTotal === 0 || exporting}
           title="Export the full audit log as CSV"
           style={{
-            padding: '3px 8px', background: 'var(--surface2)',
-            border: '1px solid var(--border)', borderRadius: '4px',
-            color: 'var(--muted)', fontSize: '10px', cursor: missionLogTotal === 0 || exporting ? 'not-allowed' : 'pointer',
+            padding: '3px 10px', background: 'var(--surface2)',
+            border: '1px solid var(--border)', borderRadius: '6px',
+            color: 'var(--muted)', fontSize: '11px', fontWeight: 600,
+            cursor: missionLogTotal === 0 || exporting ? 'not-allowed' : 'pointer',
           }}
-        >📄 CSV</button>
-        <button
-          onClick={() => setCollapsed(true)}
-          style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: '4px', color: 'var(--muted)', fontSize: '11px',
-            padding: '3px 8px', cursor: 'pointer',
-          }}
-        >▶</button>
-      </div>
+        >CSV</button>
+      </PanelHeader>
 
       {/* Filter tabs */}
       <div style={{
@@ -278,6 +228,6 @@ export function MissionLog() {
           >{missionLogLoadingMore ? 'Loading…' : 'Load older entries'}</button>
         )}
       </div>
-    </div>
+    </section>
   )
 }

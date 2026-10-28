@@ -5,6 +5,8 @@
 // ============================================================
 
 import React, { useState } from 'react'
+import { SatelliteDish } from 'lucide-react'
+import { PanelHeader } from './PanelHeader'
 import { useStore } from '../store/useStore'
 import type { GroundStation, SatPass } from '../types'
 
@@ -109,7 +111,6 @@ function PassRow({ pass, i }: { pass: SatPass; i: number }) {
 
 export function PassPredictor() {
   const { fleet, activeFleetId } = useStore()
-  const [collapsed, setCollapsed] = useState(true)   // starts collapsed
 
   const activeMember = fleet.find(m => m.id === activeFleetId) ?? fleet[0]
 
@@ -162,61 +163,9 @@ export function PassPredictor() {
     fontSize: '11px', width: '100%', outline: 'none',
   }
 
-  if (collapsed) {
-    return (
-      <div style={{
-        width: '44px', minWidth: '44px',
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        paddingTop: '10px', gap: '8px',
-      }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Expand Pass Predictor"
-          style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: '4px', color: 'var(--muted)', fontSize: '12px',
-            padding: '6px 8px', cursor: 'pointer',
-          }}
-        >◀</button>
-        <span style={{ fontSize: '16px' }}>📡</span>
-        {result && result.passes.length > 0 && (
-          <span style={{
-            background: '#1d4ed8', color: '#fff', borderRadius: '999px',
-            width: 18, height: 18, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: '10px', fontWeight: 700,
-          }}>{result.passes.length}</span>
-        )}
-      </div>
-    )
-  }
-
   return (
-    <div style={{
-      width: '290px', minWidth: '290px',
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: '8px',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '13px', flex: 1 }}>📡 Pass Predictor</span>
-        <button
-          onClick={() => setCollapsed(true)}
-          style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: '4px', color: 'var(--muted)', fontSize: '11px',
-            padding: '3px 8px', cursor: 'pointer',
-          }}
-        >▶</button>
-      </div>
+    <section id="passes" className="panel area-passes">
+      <PanelHeader icon={SatelliteDish} title="Ground Station Passes" />
 
       {/* Controls */}
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -331,6 +280,6 @@ export function PassPredictor() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

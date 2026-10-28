@@ -1,11 +1,13 @@
 // ============================================================
 // src/components/FleetPanel.tsx
 // Option F — Fleet overview table + fleet-wide scan
-// Width-collapse + catalog-source-aware scanning
+// Catalog-source-aware scanning; the "status" panel of the dashboard
 // ✦ Auto-refresh polling with configurable interval
 // ============================================================
 
 import React, { useState, useEffect, useRef } from 'react'
+import { Activity } from 'lucide-react'
+import { PanelHeader } from './PanelHeader'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { api } from '../api/client'
@@ -78,7 +80,6 @@ export function FleetPanel() {
   const [scanResult,   setScanResult]   = useState<FleetScanResponse | null>(null)
   const [scanError,    setScanError]    = useState<string | null>(null)
   const [showResults,  setShowResults]  = useState(true)
-  const [collapsed,    setCollapsed]    = useState(false)
   const [pollInterval, setPollInterval] = useState(0)       // minutes; 0 = off
   const [nextScanIn,   setNextScanIn]   = useState<number>(0) // seconds until next auto-scan
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -190,247 +191,183 @@ export function FleetPanel() {
     }
   }, [pollInterval])
 
-  if (collapsed) {
-    return (
-      <div style={{
-        width: '44px',
-        minWidth: '44px',
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: '10px',
-        gap: '8px',
-      }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Expand Fleet Status panel"
-          style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--muted)',
-            fontSize: '12px',
-            padding: '6px 8px',
-            cursor: 'pointer',
-          }}
-        >
-          ◀
-        </button>
-        <span style={{ fontSize: '16px' }}>🔍</span>
-        {scanResult && scanResult.critical_count > 0 && (
-          <span style={{
-            background: '#dc2626',
-            color: '#fff',
-            borderRadius: '999px',
-            width: 18, height: 18,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '10px', fontWeight: 700,
-          }}>
-            {scanResult.critical_count}
-          </span>
-        )}
-      </div>
-    )
-  }
-
   return (
-    <div style={{
-      width: '320px',
-      minWidth: '320px',
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      padding: '12px 14px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      overflowY: 'auto',
-    }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          onClick={handleFleetScan}
-          disabled={fleetLoading}
-          style={{
-            flex: 1,
-            padding: '8px',
-            background: fleetLoading ? 'var(--surface2)' : '#1d4ed8',
-            border: 'none',
-            borderRadius: '5px',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: '12px',
-            cursor: fleetLoading ? 'not-allowed' : 'pointer',
-            opacity: fleetLoading ? 0.7 : 1,
-          }}
-        >
-          {fleetLoading ? '⏳ Scanning fleet…' : '🔍 Scan Entire Fleet'}
-        </button>
-
-        {/* Auto-refresh selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
-          <select
-            value={pollInterval}
-            onChange={e => setPollInterval(Number(e.target.value))}
-            title="Auto-refresh interval"
-            style={{
-              background: 'var(--surface2)', border: '1px solid var(--border)',
-              borderRadius: '4px', color: pollInterval > 0 ? '#22c55e' : 'var(--muted)',
-              fontSize: '11px', padding: '6px 4px', cursor: 'pointer',
-            }}
-          >
-            {POLL_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>🔄 {o.label}</option>
-            ))}
-          </select>
-          {pollInterval > 0 && nextScanIn > 0 && (
-            <span style={{ fontSize: '9px', color: '#22c55e', fontFamily: 'monospace' }}>
-              next {Math.floor(nextScanIn / 60)}:{String(nextScanIn % 60).padStart(2,'0')}
-            </span>
-          )}
-        </div>
+    <section id="status" className="panel area-status">
+      <PanelHeader icon={Activity} title="Fleet Status">
         <button
           onClick={() => exportFleetCSV(fleet)}
+          title="Export every fleet conjunction as CSV"
           style={{
-            padding: '8px 14px',
+            padding: '3px 10px',
             background: 'var(--surface2)',
             border: '1px solid var(--border)',
-            borderRadius: '5px',
+            borderRadius: '6px',
             color: 'var(--text)',
-            fontWeight: 700,
-            fontSize: '12px',
+            fontWeight: 600,
+            fontSize: '11px',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
-          📄 Export CSV
+          Export CSV
         </button>
-        <button
-          onClick={() => setCollapsed(true)}
-          title="Collapse Fleet Status panel"
-          style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--muted)',
-            fontSize: '11px',
-            padding: '8px',
-            cursor: 'pointer',
-          }}
-        >
-          ▶
-        </button>
-      </div>
+      </PanelHeader>
 
-      {scanError && (
-        <div style={{ fontSize: '11px', color: '#f87171' }}>{scanError}</div>
-      )}
-
-      {scanResult && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: '6px',
-        }}>
-          {[
-            { label: 'Scanned',  value: scanResult.fleet_size    },
-            { label: 'Events',   value: scanResult.total_events  },
-            { label: 'Critical', value: scanResult.critical_count, red: true },
-          ].map(({ label, value, red }) => (
-            <div key={label} style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: '5px',
-              padding: '6px 8px',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: 800, color: red && value > 0 ? '#dc2626' : 'var(--text)' }}>
-                {value}
-              </div>
-              <div style={{ fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase' }}>
-                {label}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div
-        onClick={() => setShowResults(s => !s)}
-        style={{
-          fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase',
-          letterSpacing: '0.06em', cursor: 'pointer',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}
-      >
-        <span>Fleet Status</span>
-        <span>{showResults ? '▲' : '▼'}</span>
-      </div>
-
-      {showResults && fleet.map(member => {
-        const result = scanResult?.results.find(r => r.spacecraft_name === member.tle.name)
-        return (
-          <div
-            key={member.id}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <button
+            onClick={handleFleetScan}
+            disabled={fleetLoading}
             style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
+              flex: 1,
+              padding: '8px',
+              background: fleetLoading ? 'var(--surface2)' : 'var(--accent-strong)',
+              border: 'none',
               borderRadius: '6px',
-              padding: '10px 12px',
-              borderLeft: `3px solid ${member.colour}`,
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: '12px',
+              cursor: fleetLoading ? 'not-allowed' : 'pointer',
+              opacity: fleetLoading ? 0.7 : 1,
             }}
           >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '6px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: member.colour,
-                  boxShadow: `0 0 5px ${member.colour}`,
-                  flexShrink: 0,
-                }} />
-                <span style={{ fontWeight: 700, fontSize: '12px' }}>{member.tle.name}</span>
-              </div>
-              <RiskBadge level={member.risk_level} score={member.risk_score > 0 ? member.risk_score : undefined} size="sm" />
-            </div>
+            {fleetLoading ? '⏳ Scanning fleet…' : '🔍 Scan Entire Fleet'}
+          </button>
 
-            <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: 'var(--muted)', flexWrap: 'wrap' }}>
-              {member.live_frame && (
-                <>
-                  <span>ALT <b style={{ color: 'var(--text)' }}>{member.live_frame.altitude_km.toFixed(0)} km</b></span>
-                  <span>SPD <b style={{ color: 'var(--text)' }}>{member.live_frame.speed_kms.toFixed(2)} km/s</b></span>
-                  <span>LAT <b style={{ color: 'var(--text)' }}>{member.live_frame.latitude_deg.toFixed(1)}°</b></span>
-                </>
-              )}
-              {result && (
-                <span>{result.event_count} conjunction{result.event_count !== 1 ? 's' : ''} detected</span>
-              )}
-              {!member.live_frame && !result && (
-                <span>Not yet scanned</span>
-              )}
-            </div>
-
-            {member.events.length > 0 && (
-              <div style={{
-                marginTop: '6px',
-                padding: '5px 8px',
-                background: 'var(--surface)',
-                borderRadius: '4px',
-                fontSize: '10px',
-                color: 'var(--muted)',
-              }}>
-                Top threat: <b style={{ color: 'var(--text)' }}>{member.events[0].debris_name}</b>
-                {' '}— miss {member.events[0].miss_distance_km.toFixed(2)} km
-                {' '}in {member.events[0].hours_to_tca.toFixed(1)} h
-              </div>
+          {/* Auto-refresh selector */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+            <select
+              value={pollInterval}
+              onChange={e => setPollInterval(Number(e.target.value))}
+              title="Auto-refresh interval"
+              style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: '6px', color: pollInterval > 0 ? '#22c55e' : 'var(--muted)',
+                fontSize: '11px', padding: '8px 4px', cursor: 'pointer',
+              }}
+            >
+              {POLL_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>🔄 {o.label}</option>
+              ))}
+            </select>
+            {pollInterval > 0 && nextScanIn > 0 && (
+              <span style={{ fontSize: '9px', color: '#22c55e', fontFamily: 'monospace' }}>
+                next {Math.floor(nextScanIn / 60)}:{String(nextScanIn % 60).padStart(2,'0')}
+              </span>
             )}
           </div>
-        )
-      })}
-    </div>
+        </div>
+
+        {scanError && (
+          <div style={{ fontSize: '11px', color: '#f87171' }}>{scanError}</div>
+        )}
+
+        {scanResult && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: '6px',
+          }}>
+            {[
+              { label: 'Scanned',  value: scanResult.fleet_size    },
+              { label: 'Events',   value: scanResult.total_events  },
+              { label: 'Critical', value: scanResult.critical_count, red: true },
+            ].map(({ label, value, red }) => (
+              <div key={label} style={{
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: '5px',
+                padding: '6px 8px',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: red && value > 0 ? '#dc2626' : 'var(--text)' }}>
+                  {value}
+                </div>
+                <div style={{ fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase' }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div
+          onClick={() => setShowResults(s => !s)}
+          style={{
+            fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase',
+            letterSpacing: '0.06em', cursor: 'pointer',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}
+        >
+          <span>Fleet Status</span>
+          <span>{showResults ? '▲' : '▼'}</span>
+        </div>
+
+        {showResults && fleet.map(member => {
+          const result = scanResult?.results.find(r => r.spacecraft_name === member.tle.name)
+          return (
+            <div
+              key={member.id}
+              style={{
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                padding: '10px 12px',
+                borderLeft: `3px solid ${member.colour}`,
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '6px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: member.colour,
+                    boxShadow: `0 0 5px ${member.colour}`,
+                    flexShrink: 0,
+                  }} />
+                  <span style={{ fontWeight: 700, fontSize: '12px' }}>{member.tle.name}</span>
+                </div>
+                <RiskBadge level={member.risk_level} score={member.risk_score > 0 ? member.risk_score : undefined} size="sm" />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: 'var(--muted)', flexWrap: 'wrap' }}>
+                {member.live_frame && (
+                  <>
+                    <span>ALT <b style={{ color: 'var(--text)' }}>{member.live_frame.altitude_km.toFixed(0)} km</b></span>
+                    <span>SPD <b style={{ color: 'var(--text)' }}>{member.live_frame.speed_kms.toFixed(2)} km/s</b></span>
+                    <span>LAT <b style={{ color: 'var(--text)' }}>{member.live_frame.latitude_deg.toFixed(1)}°</b></span>
+                  </>
+                )}
+                {result && (
+                  <span>{result.event_count} conjunction{result.event_count !== 1 ? 's' : ''} detected</span>
+                )}
+                {!member.live_frame && !result && (
+                  <span>Not yet scanned</span>
+                )}
+              </div>
+
+              {member.events.length > 0 && (
+                <div style={{
+                  marginTop: '6px',
+                  padding: '5px 8px',
+                  background: 'var(--surface)',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  color: 'var(--muted)',
+                }}>
+                  Top threat: <b style={{ color: 'var(--text)' }}>{member.events[0].debris_name}</b>
+                  {' '}— miss {member.events[0].miss_distance_km.toFixed(2)} km
+                  {' '}in {member.events[0].hours_to_tca.toFixed(1)} h
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }

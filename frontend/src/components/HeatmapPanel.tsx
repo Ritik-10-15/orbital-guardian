@@ -48,7 +48,7 @@ export function HeatmapPanel() {
       position: 'absolute',
       bottom: '70px',
       left: '14px',
-      background: 'rgba(10,14,26,0.92)',
+      background: 'var(--overlay)',
       border: '1px solid var(--border)',
       borderRadius: '6px',
       width: '220px',

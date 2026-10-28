@@ -82,13 +82,14 @@ export const RISK_COLOURS: Record<RiskLevel, string> = {
   UNKNOWN:    '#6b7280',
 }
 
+// Translucent tints so badges read on both the dark and light themes
 export const RISK_BG: Record<RiskLevel, string> = {
-  NEGLIGIBLE: '#eff6ff',
-  LOW:        '#f0fdf4',
-  MODERATE:   '#fefce8',
-  HIGH:       '#fff7ed',
-  CRITICAL:   '#fef2f2',
-  UNKNOWN:    '#f9fafb',
+  NEGLIGIBLE: 'rgba(37, 99, 235, 0.14)',
+  LOW:        'rgba(22, 163, 74, 0.14)',
+  MODERATE:   'rgba(202, 138, 4, 0.16)',
+  HIGH:       'rgba(234, 88, 12, 0.16)',
+  CRITICAL:   'rgba(220, 38, 38, 0.18)',
+  UNKNOWN:    'rgba(107, 114, 128, 0.14)',
 }
 
 // ── Option F: Fleet management ────────────────────────────────

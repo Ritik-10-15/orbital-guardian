@@ -10,6 +10,8 @@
 // ============================================================
 
 import React, { useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { PanelHeader } from './PanelHeader'
 import { useStore } from '../store/useStore'
 import { RiskBadge } from './RiskBadge'
 import { api } from '../api/client'
@@ -345,7 +347,7 @@ function EventRow({ ev, selected, onClick }: {
         gap: '4px',
         transition: 'background 0.15s',
       }}
-      onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = '#1f2937' }}
+      onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface2)' }}
       onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -468,7 +470,8 @@ function EventDetail({ ev }: { ev: ConjunctionEvent }) {
       background: 'var(--surface2)',
       borderTop: '1px solid var(--border)',
       overflowY: 'auto',
-      maxHeight: '55vh',
+      flex: 1,
+      minHeight: 0,
     }}>
       {/* Header */}
       <div style={{
@@ -567,109 +570,21 @@ function ApprovalBadge({ status }: { status: ApprovalStatus }) {
   )
 }
 // ── Main dashboard ───────────────────────────────────────────
-// ── Main dashboard ───────────────────────────────────────────
 export function AlertDashboard() {
   const { events, selectedEvent, setSelectedEvent, loading, error } = useStore()
-  const [collapsed, setCollapsed] = useState(false)
-
-  if (collapsed) {
-    return (
-      <div style={{
-        width: '44px',
-        minWidth: '44px',
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: '10px',
-        gap: '8px',
-      }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Expand Conjunction Alerts panel"
-          style={{
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--muted)',
-            fontSize: '12px',
-            padding: '6px 8px',
-            cursor: 'pointer',
-          }}
-        >
-          ◀
-        </button>
-        <span style={{ fontSize: '16px' }}>⚠</span>
-        {events.length > 0 && (
-          <span style={{
-            background: '#dc2626',
-            color: '#fff',
-            borderRadius: '999px',
-            width: 18, height: 18,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '10px', fontWeight: 700,
-          }}>
-            {events.length}
-          </span>
-        )}
-      </div>
-    )
-  }
 
   return (
-    <div style={{
-      width: '320px',
-      minWidth: '320px',
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '13px' }}>⚠ Conjunction Alerts</span>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {events.length > 0 && (
-            <span style={{
-              background: '#dc2626',
-              color: '#fff',
-              borderRadius: '999px',
-              padding: '1px 8px',
-              fontSize: '11px',
-              fontWeight: 700,
-            }}>
-              {events.length}
-            </span>
-          )}
-          <button
-            onClick={() => setCollapsed(true)}
-            title="Collapse Conjunction Alerts panel"
-            style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: '4px',
-              color: 'var(--muted)',
-              fontSize: '11px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-            }}
-          >
-            ▶
-          </button>
-        </div>
-      </div>
+    <section id="alerts" className="panel area-alerts">
+      <PanelHeader icon={AlertTriangle} title="Conjunction Alerts">
+        {events.length > 0 && (
+          <span className="chip" style={{ background: '#dc2626', borderColor: '#dc2626', color: '#fff' }}>
+            {events.length} event{events.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </PanelHeader>
 
       {/* Event list */}
-      <div style={{ flex: selectedEvent ? '0 0 auto' : 1, overflowY: 'auto' }}>
+      <div style={{ flex: selectedEvent ? '0 0 auto' : 1, maxHeight: selectedEvent ? '38%' : undefined, overflowY: 'auto' }}>
         {loading && (
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
             ⏳ Scanning 72-hour window…
@@ -682,7 +597,7 @@ export function AlertDashboard() {
         )}
         {!loading && events.length === 0 && !error && (
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-            No events detected.<br />Click <strong>🔍 Scan Conjunctions</strong> to check for threats.
+            No events detected.<br />Use <strong>Scan Setup</strong> to screen this spacecraft for threats.
           </div>
         )}
         {events.map((ev, i) => (
@@ -699,6 +614,6 @@ export function AlertDashboard() {
 
       {/* Selected event detail + simulator */}
       {selectedEvent && <EventDetail ev={selectedEvent} />}
-    </div>
+    </section>
   )
 }
